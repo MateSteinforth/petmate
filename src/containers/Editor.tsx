@@ -7,7 +7,7 @@ import ColorPicker from '../components/ColorPicker'
 import CharGrid from '../components/CharGrid'
 import CharPosOverlay, { TextCursorOverlay } from '../components/CharPosOverlay'
 import GridOverlay from '../components/GridOverlay'
-import CrtOverlay from '../components/CrtOverlay'
+import CrtOverlay, { CRT_FILTER_COLOR, CRT_FILTER_PET } from '../components/CrtOverlay'
 import { CanvasStatusbar } from '../components/Statusbar'
 
 import CharSelect from './CharSelect'
@@ -895,8 +895,10 @@ class Editor extends Component<EditorProps & EditorDispatch> {
     const scaleY = scaleX;
     const fbContainerClass =
       classNames(styles.fbContainer, this.props.selectedTool == Tool.PanZoom ? styles.panzoom : null);
+    const petScreen = this.props.framebuf.charset === framebuf.CHARSET_PET_UPPER
+      || this.props.framebuf.charset === framebuf.CHARSET_PET_LOWER;
     const screenStyle = this.props.crtEffect ?
-      { ...framebufStyle, filter: 'url(#pet-crt)' } :
+      { ...framebufStyle, filter: `url(#${petScreen ? CRT_FILTER_PET : CRT_FILTER_COLOR})` } :
       framebufStyle;
     return (
       <div
@@ -914,7 +916,7 @@ class Editor extends Component<EditorProps & EditorDispatch> {
                   onCharPosChanged={this.handleCharPosChanged} /> :
                 null}
             </div>
-            {this.props.crtEffect ? <CrtOverlay /> : null}
+            {this.props.crtEffect ? <CrtOverlay green={petScreen} /> : null}
           </div>
           <CanvasStatusbar
             framebuf={this.props.framebuf}

@@ -370,7 +370,7 @@ class ToolbarView extends Component<
           onIconClick={() => this.props.Toolbar.setCrtEffect(!this.props.crtEffect)}
           selected={this.props.crtEffect}
           iconName={faTv}
-          tooltip='PET CRT (P)'
+          tooltip='CRT (P)'
         />
 
         <FbColorPicker

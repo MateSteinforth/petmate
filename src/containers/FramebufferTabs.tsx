@@ -413,6 +413,16 @@ function NewTabButton (props: {
         dims={props.dims}
         Toolbar={props.Toolbar}
       />
+      <div
+        className={styles.screenDimText}
+        title='Toggle new screen width between 40 and 80 columns'
+        onClick={() => props.Toolbar.setNewScreenSize({
+          width: props.dims.width === 80 ? 40 : 80,
+          height: props.dims.height
+        })}
+      >
+        {props.dims.width === 80 ? '80 col' : '40 col'}
+      </div>
     </div>
   )
 }

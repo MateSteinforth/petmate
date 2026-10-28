@@ -9,7 +9,8 @@ import {
   saveGIF,
   saveJSON,
   saveSEQ,
-  savePET
+  savePET,
+  savePetPrg
 } from './exporters'
 
 import {
@@ -114,6 +115,12 @@ export const formats: { [index: string]: FileFormat } = {
       currentScreenOnly: true
     }
   },
+  petprg: {
+    name: 'Commodore PET screen RAM .prg',
+    ext: 'petprg',
+    fileExt: 'prg',
+    commonExportParams: defaultExportCommon,
+  },
   pet: {
     name: 'C64 Raster Effect Editor .pet',
     ext: 'pet',
@@ -198,6 +205,8 @@ const saveFramebufs = (fmt: FileFormat, filename: string, framebufs: FramebufWit
     return saveJSON(filename, framebufs, fonts, fmt);
   } else if (fmt.ext === 'pet') {
     return savePET(filename, framebufs, fmt);
+  } else if (fmt.ext === 'petprg') {
+    return savePetPrg(filename, selectedFramebuf);
   }
   throw new Error("shouldn't happen");
 }
@@ -310,6 +319,8 @@ export const loadAppFile = (filename: string) => {
 
 export const systemFontData = loadAppFile('assets/system-charset.bin')
 export const systemFontDataLower = loadAppFile('assets/system-charset-lower.bin')
+export const petFontData = loadAppFile('assets/pet-charset-upper.bin')
+export const petFontDataLower = loadAppFile('assets/pet-charset-lower.bin')
 export const executablePrgTemplate = loadAppFile('assets/template.prg')
 
 export function setWorkspaceFilenameWithTitle(setWorkspaceFilename: (fname: string) => void, filename: string) {
@@ -368,7 +379,7 @@ export function dialogExportFile(fmt: FileFormat, framebufs: FramebufWithFont[],
   const {dialog} = electron.remote
   const window = electron.remote.getCurrentWindow();
   const filters = [
-    {name: fmt.name, extensions: [fmt.ext]}
+    {name: fmt.name, extensions: [fmt.fileExt || fmt.ext]}
   ]
   const filename = dialog.showSaveDialogSync(window, {properties: ['openFile'], filters})
   if (filename === undefined) {

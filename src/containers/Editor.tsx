@@ -7,6 +7,7 @@ import ColorPicker from '../components/ColorPicker'
 import CharGrid from '../components/CharGrid'
 import CharPosOverlay, { TextCursorOverlay } from '../components/CharPosOverlay'
 import GridOverlay from '../components/GridOverlay'
+import CrtOverlay from '../components/CrtOverlay'
 import { CanvasStatusbar } from '../components/Statusbar'
 
 import CharSelect from './CharSelect'
@@ -839,6 +840,7 @@ interface EditorProps {
   selectedTool: Tool;
 
   integerScale: boolean;
+  crtEffect: boolean;
   containerSize: { width: number, height: number };
 }
 
@@ -893,6 +895,9 @@ class Editor extends Component<EditorProps & EditorDispatch> {
     const scaleY = scaleX;
     const fbContainerClass =
       classNames(styles.fbContainer, this.props.selectedTool == Tool.PanZoom ? styles.panzoom : null);
+    const screenStyle = this.props.crtEffect ?
+      { ...framebufStyle, filter: 'url(#pet-crt)' } :
+      framebufStyle;
     return (
       <div
         className={styles.editorLayoutContainer}
@@ -900,13 +905,16 @@ class Editor extends Component<EditorProps & EditorDispatch> {
         <div>
           <div
             className={fbContainerClass}
-            style={framebufStyle}>
-            {this.props.framebuf ?
-              <FramebufferCont
-                framebufLayout={framebufSize}
-                framebufUIState={this.props.framebufUIState}
-                onCharPosChanged={this.handleCharPosChanged} /> :
-              null}
+          >
+            <div style={screenStyle}>
+              {this.props.framebuf ?
+                <FramebufferCont
+                  framebufLayout={framebufSize}
+                  framebufUIState={this.props.framebufUIState}
+                  onCharPosChanged={this.handleCharPosChanged} /> :
+                null}
+            </div>
+            {this.props.crtEffect ? <CrtOverlay /> : null}
           </div>
           <CanvasStatusbar
             framebuf={this.props.framebuf}
@@ -943,6 +951,7 @@ export default connect(
       paletteRemap: getSettingsPaletteRemap(state),
       colorPalette: getSettingsCurrentColorPalette(state),
       integerScale: getSettingsIntegerScale(state),
+      crtEffect: state.toolbar.crtEffect,
       framebufUIState: selectors.getFramebufUIState(state, framebufIndex)
     }
   },

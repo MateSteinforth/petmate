@@ -166,13 +166,14 @@ class NameEditor extends Component<NameEditorProps, NameEditorState> {
 function computeContainerSize(fb: Framebuf, maxHeight: number) {
   const pixWidth = fb.width * 8;
   const pixHeight = fb.height * 8;
+  const aspectX = utils.screenPixelAspectX(fb.width);
   // TODO if height is bigger than maxHeight, need to scale differently
   // to fit the box.
   const s = maxHeight / pixHeight;
   return {
-    divWidth: pixWidth * s,
+    divWidth: pixWidth * aspectX * s,
     divHeight: maxHeight,
-    scaleX: s,
+    scaleX: s * aspectX,
     scaleY: s
   }
 }

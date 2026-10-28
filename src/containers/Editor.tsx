@@ -199,7 +199,8 @@ interface FramebufferViewProps {
 
   framebufLayout: {
     width: number, height: number,
-    pixelScale: number
+    pixelScaleX: number,
+    pixelScaleY: number
   };
 }
 
@@ -349,8 +350,8 @@ class FramebufferView extends Component<FramebufferViewProps & FramebufferViewDi
     }
 
     const bbox = this.ref.current.getBoundingClientRect();
-    const xx = (e.clientX - bbox.left) / this.props.framebufLayout.pixelScale;
-    const yy = (e.clientY - bbox.top) / this.props.framebufLayout.pixelScale;
+    const xx = (e.clientX - bbox.left) / this.props.framebufLayout.pixelScaleX;
+    const yy = (e.clientY - bbox.top) / this.props.framebufLayout.pixelScaleY;
 
     const invXform = matrix.invert(this.props.framebufUIState.canvasTransform);
     let [x, y] = matrix.multVect3(invXform, [xx, yy, 1]);
@@ -497,8 +498,8 @@ class FramebufferView extends Component<FramebufferViewProps & FramebufferViewDi
     let ty = xf.v[1][2];
     tx = Math.min(tx, 0);
     ty = Math.min(ty, 0);
-    const xx = this.props.framebufLayout.width / this.props.framebufLayout.pixelScale;
-    const yy = this.props.framebufLayout.height / this.props.framebufLayout.pixelScale;
+    const xx = this.props.framebufLayout.width / this.props.framebufLayout.pixelScaleX;
+    const yy = this.props.framebufLayout.height / this.props.framebufLayout.pixelScaleY;
     const [swidth, sheight] = matrix.multVect3(xform, [this.props.framebufWidth*8, this.props.framebufHeight*8, 0]);
     tx = Math.max(tx, -(swidth - xx));
     ty = Math.max(ty, -(sheight - yy));
@@ -509,8 +510,8 @@ class FramebufferView extends Component<FramebufferViewProps & FramebufferViewDi
 
   handlePanZoomPointerMove (e: any) {
     if (this.panZoomDragging) {
-      const dx = e.nativeEvent.movementX / this.props.framebufLayout.pixelScale;
-      const dy = e.nativeEvent.movementY / this.props.framebufLayout.pixelScale;
+      const dx = e.nativeEvent.movementX / this.props.framebufLayout.pixelScaleX;
+      const dy = e.nativeEvent.movementY / this.props.framebufLayout.pixelScaleY;
 
       const prevUIState = this.props.framebufUIState;
       const prevTransform = prevUIState.canvasTransform;
@@ -560,8 +561,8 @@ class FramebufferView extends Component<FramebufferViewProps & FramebufferViewDi
       1.0/(1 - (delta / (wheelScale+1))) : (1 - (delta / (wheelScale+1)));
 
     const bbox = this.ref.current.getBoundingClientRect();
-    const mouseX = (e.nativeEvent.clientX - bbox.left) / this.props.framebufLayout.pixelScale;
-    const mouseY = (e.nativeEvent.clientY - bbox.top) / this.props.framebufLayout.pixelScale;
+    const mouseX = (e.nativeEvent.clientX - bbox.left) / this.props.framebufLayout.pixelScaleX;
+    const mouseY = (e.nativeEvent.clientY - bbox.top) / this.props.framebufLayout.pixelScaleY;
 
     const prevUIState = this.props.framebufUIState;
 
@@ -705,7 +706,7 @@ class FramebufferView extends Component<FramebufferViewProps & FramebufferViewDi
     const canvasContainerStyle: CSSProperties = {
       transform: matrix.toCss(
         matrix.mult(
-          matrix.scale(this.props.framebufLayout.pixelScale),
+          matrix.scale(this.props.framebufLayout.pixelScaleX, this.props.framebufLayout.pixelScaleY),
             this.clampToWindow(transform)
         )
       )
@@ -757,9 +758,13 @@ function computeFramebufLayout(args: {
 
   const canvasWidth = charWidth * 8;
   const canvasHeight = charHeight * 8;
+  // 80-column glyphs stay 8 dots wide, but occupy half the horizontal space
+  // so the screen is the same width as a 40-column screen.
+  const aspectX = utils.screenPixelAspectX(charWidth);
+  const visualWidth = canvasWidth * aspectX;
 
-  let ws =  maxWidth / canvasWidth;
-  let divWidth = canvasWidth * ws;
+  let ws =  maxWidth / visualWidth;
+  let divWidth = visualWidth * ws;
   let divHeight = canvasHeight * ws;
 
   const fitWidth = args.canvasFit == 'fitWidth';
@@ -780,7 +785,8 @@ function computeFramebufLayout(args: {
   return {
     width: divWidth,
     height: divHeight,
-    pixelScale: ws
+    pixelScaleX: ws * aspectX,
+    pixelScaleY: ws
   }
 }
 

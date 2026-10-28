@@ -39,6 +39,12 @@ const defaultExportCommon = {
   selectedFramebufIndex: 0
 }
 
+// The 80-column PET uses the same physical screen width as the 40-column
+// models. Glyphs are still 8 dots wide; each dot is just half as wide.
+export function screenPixelAspectX(columns: number): number {
+  return columns === 80 ? 0.5 : 1;
+}
+
 // TODO ts use FileFormat type
 export const formats: { [index: string]: FileFormat } = {
   png: {

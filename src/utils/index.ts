@@ -19,7 +19,8 @@ import {
 
 import { colorPalettes } from './palette'
 
-import { electron, fs, path } from './electronImports'
+import { fs, path } from './electronImports'
+import * as platform from './platform'
 import {
   FileFormat, Rgb, Font, Coord2, Framebuf, Settings,
   FramebufWithFont,
@@ -30,8 +31,6 @@ import {
 import * as ReduxRoot from '../redux/root';
 import * as selectors from '../redux/selectors';
 import * as customFonts from '../redux/customFonts'
-
-const { ipcRenderer } = electron
 
 // TODO import VICE VPL files
 
@@ -238,14 +237,12 @@ function customFontsToJson(cf: customFonts.CustomFonts): WsCustomFontsV2 {
 
 const WORKSPACE_VERSION = 2;
 
-export function saveWorkspace (
-  filename: string,
+export function workspaceToJson (
   screens: number[],
   getFramebufById: GetFramebufByIdFunc,
-  customFonts: customFonts.CustomFonts,
-  updateLastSavedSnapshot: () => void
-) {
-  const content = JSON.stringify({
+  customFonts: customFonts.CustomFonts
+): string {
+  return JSON.stringify({
     version: WORKSPACE_VERSION,
     // Renumber screen indices to 0,1,2,..,N and drop unused framebufs
     screens: screens.map((_t,idx )=> idx),
@@ -256,10 +253,20 @@ export function saveWorkspace (
     }),
     customFonts: customFontsToJson(customFonts)
   })
+}
+
+export function saveWorkspace (
+  filename: string,
+  screens: number[],
+  getFramebufById: GetFramebufByIdFunc,
+  customFonts: customFonts.CustomFonts,
+  updateLastSavedSnapshot: () => void
+) {
+  const content = workspaceToJson(screens, getFramebufById, customFonts)
   try {
     fs.writeFileSync(filename, content, 'utf-8');
     updateLastSavedSnapshot();
-    electron.remote.app.addRecentDocument(filename);
+    platform.addRecentDocument(filename);
   }
   catch(e) {
     alert(`Failed to save file '${filename}'!`)
@@ -318,10 +325,7 @@ export function chunkArray<T>(myArray: T[], chunk_size: number){
 }
 
 
-export const loadAppFile = (filename: string) => {
-  const appPath = electron.remote.app.getAppPath()
-  return fs.readFileSync(path.resolve(appPath, filename));
-}
+const loadAppFile = platform.loadAppFile
 
 export const systemFontData = loadAppFile('assets/system-charset.bin')
 export const systemFontDataLower = loadAppFile('assets/system-charset-lower.bin')
@@ -331,7 +335,7 @@ export const executablePrgTemplate = loadAppFile('assets/template.prg')
 
 export function setWorkspaceFilenameWithTitle(setWorkspaceFilename: (fname: string) => void, filename: string) {
   setWorkspaceFilename(filename)
-  ipcRenderer.send('set-title', `Petmate - ${filename}`)
+  platform.setTitle(`Petmate - ${platform.isElectron ? filename : path.basename(filename)}`)
 }
 
 type StoreDispatch = any;
@@ -342,103 +346,92 @@ export function loadWorkspaceNoDialog(
   dispatch(ReduxRoot.actions.openWorkspace(filename));
 }
 
+// Base name (no directory, no extension) used for naming saved and exported
+// files in the browser, where there's no save dialog.
+export function workspaceBaseName(workspaceFilename: string|null): string {
+  if (workspaceFilename === null) {
+    return 'untitled'
+  }
+  const base = path.basename(workspaceFilename)
+  return base.replace(/\.petmate$/, '')
+}
+
 export function dialogLoadWorkspace(
   dispatch: StoreDispatch
 ) {
-  const { dialog } = electron.remote;
-  const window = electron.remote.getCurrentWindow();
   const filters = [
     {name: 'Petmate workspace', extensions: ['petmate']},
   ]
-  const filename = dialog.showOpenDialogSync(window, {properties: ['openFile'], filters})
-  if (filename === undefined) {
-    return
-  }
-  if (filename.length === 1) {
-    loadWorkspaceNoDialog(dispatch, filename[0]);
-  } else {
-    console.error('wtf?!')
-  }
+  platform.showOpenDialog(filters).then(filename => {
+    if (filename !== undefined) {
+      loadWorkspaceNoDialog(dispatch, filename);
+    }
+  })
 }
 
 export function dialogSaveAsWorkspace(
   screens: number[],
   getFramebufByIndex: (fbidx: number) => Framebuf,
   customFonts: customFonts.CustomFonts,
+  workspaceFilename: string|null,
   setWorkspaceFilename: (fname: string) => void,
   updateLastSavedSnapshot: () => void
 ) {
-  const {dialog} = electron.remote;
-  const window = electron.remote.getCurrentWindow();
   const filters = [
     {name: 'Petmate workspace file', extensions: ['petmate']},
   ];
-  const filename = dialog.showSaveDialogSync(window, {properties: ['openFile'], filters});
-  if (filename === undefined) {
-    return;
-  }
-  saveWorkspace(filename, screens, getFramebufByIndex, customFonts, updateLastSavedSnapshot);
-  setWorkspaceFilenameWithTitle(setWorkspaceFilename, filename);
+  const defaultName = `${workspaceBaseName(workspaceFilename)}.petmate`;
+  platform.showSaveDialog(filters, defaultName, true).then(filename => {
+    if (filename === undefined) {
+      return;
+    }
+    saveWorkspace(filename, screens, getFramebufByIndex, customFonts, updateLastSavedSnapshot);
+    setWorkspaceFilenameWithTitle(setWorkspaceFilename, filename);
+  })
 }
 
-export function dialogExportFile(fmt: FileFormat, framebufs: FramebufWithFont[], customFonts: customFonts.CustomFonts, palette: Rgb[]) {
-  const {dialog} = electron.remote
-  const window = electron.remote.getCurrentWindow();
+export function dialogExportFile(fmt: FileFormat, framebufs: FramebufWithFont[], customFonts: customFonts.CustomFonts, palette: Rgb[], baseName: string) {
+  const ext = fmt.fileExt || fmt.ext
   const filters = [
-    {name: fmt.name, extensions: [fmt.fileExt || fmt.ext]}
+    {name: fmt.name, extensions: [ext]}
   ]
-  const filename = dialog.showSaveDialogSync(window, {properties: ['openFile'], filters})
-  if (filename === undefined) {
-    return
-  }
-  saveFramebufs(fmt, filename, framebufs, customFonts, palette)
+  platform.showSaveDialog(filters, `${baseName}.${ext}`).then(filename => {
+    if (filename !== undefined) {
+      saveFramebufs(fmt, filename, framebufs, customFonts, palette)
+    }
+  })
 }
 
 // Pop up a file select dialog for a certain file type and call the
 // loadFile callback with the file contents.
 export function dialogReadFile(type: FileFormat, loadFile: (data: Buffer) => void) {
-  const {dialog} = electron.remote
-  const window = electron.remote.getCurrentWindow();
   const filters = [
     { name: type.name, extensions: [type.ext] }
   ]
-  const filename = dialog.showOpenDialogSync(window, {properties: ['openFile'], filters})
-  if (filename === undefined) {
-    return
-  }
-  if (filename.length === 1) {
-    const buf = fs.readFileSync(filename[0]);
-    loadFile(buf);
-  } else {
-    console.error('wtf?!')
-  }
+  platform.showOpenDialog(filters).then(filename => {
+    if (filename !== undefined) {
+      loadFile(fs.readFileSync(filename));
+    }
+  })
 }
 
 // TODO could use dialogReadFile to implement this, just need to change the
 // importFile API to accept file contents.
 export function dialogImportFile(type: FileFormat, importFile: (fbs: Framebuf[]) => void) {
-  const {dialog} = electron.remote
-  const window = electron.remote.getCurrentWindow();
   const filters = [
     { name: type.name, extensions: [type.ext] }
   ]
-  const filename = dialog.showOpenDialogSync(window, {properties: ['openFile'], filters})
-  if (filename === undefined) {
-    return
-  }
-  if (filename.length === 1) {
-    loadFramebuf(filename[0], importFile)
-  } else {
-    console.error('wtf?!')
-  }
+  platform.showOpenDialog(filters).then(filename => {
+    if (filename !== undefined) {
+      loadFramebuf(filename, importFile)
+    }
+  })
 }
 
 export function loadSettings(dispatchSettingsLoad: (json: Settings) => void) {
-  let settingsFile = path.join(electron.remote.app.getPath('userData'), 'Settings')
-  if (fs.existsSync(settingsFile)) {
-    const c = fs.readFileSync(settingsFile, 'utf-8')
-    const j = JSON.parse(c)
-    dispatchSettingsLoad(j)
+  const c = platform.readSettings()
+  if (c !== null) {
+    dispatchSettingsLoad(JSON.parse(c))
   }
 }
 
@@ -447,14 +440,10 @@ export function loadSettings(dispatchSettingsLoad: (json: Settings) => void) {
 // Returns: true if it's ok to continue, false otherwise.
 export function promptProceedWithUnsavedChanges(state: RootState, msg: { title: string, detail: string }) {
   if (selectors.anyUnsavedChanges(state)) {
-    const { dialog } = electron.remote;
-    return dialog.showMessageBoxSync({
-      type: 'question',
-      buttons: [msg.title, 'Cancel'],
-      cancelId: 1,
-      message: 'Workspace contains unsaved changes.',
-      detail: msg.detail
-    }) === 0;
+    return platform.confirmDialog({
+      ...msg,
+      message: 'Workspace contains unsaved changes.'
+    });
   }
   return true;
 }
@@ -464,14 +453,10 @@ export function promptProceedWithUnsavedChanges(state: RootState, msg: { title: 
 // Returns: true if it's ok to continue, false otherwise.
 export function promptProceedWithUnsavedChangesInFramebuf(state: RootState, fbIndex: number, msg: { title: string, detail: string }) {
   if (selectors.anyUnsavedChangesInFramebuf(state, fbIndex)) {
-    const { dialog } = electron.remote;
-    return dialog.showMessageBoxSync({
-      type: 'question',
-      buttons: [msg.title, 'Cancel'],
-      cancelId: 1,
-      message: 'Screen contains unsaved changes.',
-      detail: msg.detail
-    }) === 0;
+    return platform.confirmDialog({
+      ...msg,
+      message: 'Screen contains unsaved changes.'
+    });
   }
   return true;
 }

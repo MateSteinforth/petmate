@@ -182,7 +182,10 @@ const actionCreators = {
   setCanvasGrid: (flag: boolean) => createAction('Toolbar/SET_CANVAS_GRID', flag),
   setCrtEffect: (flag: boolean) => createAction('Toolbar/SET_CRT_EFFECT', flag),
   setShortcutsActive: (flag: boolean) => createAction('Toolbar/SET_SHORTCUTS_ACTIVE', flag),
-  setNewScreenSize: (dims: { width: number, height: number }) => createAction('Toolbar/SET_NEW_SCREEN_SIZE', dims)
+  setNewScreenSize: (dims: { width: number, height: number }) => createAction('Toolbar/SET_NEW_SCREEN_SIZE', dims),
+  setCursorMode: (flag: boolean) => createAction('Toolbar/SET_CURSOR_MODE', flag),
+  setCursorPos: (pos: Coord2) => createAction('Toolbar/SET_CURSOR_POS', pos),
+  setCursorDrawing: (flag: boolean) => createAction('Toolbar/SET_CURSOR_DRAWING', flag)
 };
 
 export type Actions = ActionsUnion<typeof actionCreators>;
@@ -557,6 +560,9 @@ export class Toolbar {
       crtEffect: false,
       shortcutsActive: true,
       newScreenSize: { width: DEFAULT_FB_WIDTH, height: DEFAULT_FB_HEIGHT },
+      cursorMode: false,
+      cursorPos: { row: 12, col: 20 },
+      cursorDrawing: false,
       framebufUIState: {}
     }, action: Actions) {
     switch (action.type) {
@@ -692,6 +698,12 @@ export class Toolbar {
         return updateField(state, 'shortcutsActive', action.data);
       case 'Toolbar/SET_NEW_SCREEN_SIZE':
         return updateField(state, 'newScreenSize', action.data);
+      case 'Toolbar/SET_CURSOR_MODE':
+        return updateField(state, 'cursorMode', action.data);
+      case 'Toolbar/SET_CURSOR_POS':
+        return updateField(state, 'cursorPos', action.data);
+      case 'Toolbar/SET_CURSOR_DRAWING':
+        return updateField(state, 'cursorDrawing', action.data);
       default:
         return state;
     }

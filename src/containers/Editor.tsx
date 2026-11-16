@@ -1,5 +1,5 @@
 
-import React, { Component, Fragment, CSSProperties, WheelEvent } from 'react';
+import React, { Component, Fragment, CSSProperties, WheelEvent, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { connect } from 'react-redux'
 import classNames from 'classnames'
@@ -32,6 +32,7 @@ import * as ReduxRoot from '../redux/root'
 import * as utils from '../utils';
 import * as matrix from '../utils/matrix';
 import { focusTextInput } from '../touch/TextInputBridge';
+import { petOnly, isTouchLayout } from '../utils/platform';
 
 import styles from './Editor.module.css';
 import {
@@ -44,6 +45,10 @@ import {
   Tool,
   Pixel, Framebuf, FramebufUIState
 } from '../redux/types'
+
+// PET-only build with a keyboard: the canvas always shows a cursor that's
+// moved with the arrow keys (see the key handling in redux/toolbar).
+const keyboardCursor = petOnly && !isTouchLayout();
 
 const brushOutlineSelectingColor = 'rgba(128, 255, 128, 0.5)';
 
@@ -170,6 +175,40 @@ class BrushOverlay extends Component<BrushOverlayProps> {
       </div>
     )
   }
+}
+
+// The keyboard cursor shows the selected character, i.e. what pressing
+// space would put down there.
+function CursorCharPreview (props: {
+  charPos: Coord2;
+  screencode: number;
+  color: number;
+  backgroundColor: string;
+  colorPalette: Rgb[];
+  font: Font;
+}) {
+  const { screencode, color } = props;
+  const framebuf = useMemo(() => [[{ code: screencode, color }]], [screencode, color]);
+  return (
+    <div style={{
+      position: 'absolute',
+      left: props.charPos.col*8,
+      top: props.charPos.row*8,
+      width: 8,
+      height: 8,
+      pointerEvents: 'none'
+    }}>
+      <CharGrid
+        width={1}
+        height={1}
+        grid={false}
+        backgroundColor={props.backgroundColor}
+        colorPalette={props.colorPalette}
+        font={props.font}
+        framebuf={framebuf}
+      />
+    </div>
+  );
 }
 
 interface FramebufferViewProps {
@@ -422,6 +461,10 @@ class FramebufferView extends Component<FramebufferViewProps & FramebufferViewDi
 
     const { charPos } = this.currentCharPos(e);
     this.setCharPos(true, charPos);
+    if (keyboardCursor) {
+      // Clicking the canvas also brings the keyboard cursor there.
+      this.props.Toolbar.setCursorPos(this.clampToFramebuf(charPos));
+    }
 
     // alt-left click doesn't start dragging
     if (this.props.altKey) {
@@ -1106,7 +1149,18 @@ class FramebufferView extends Component<FramebufferViewProps & FramebufferViewDi
           />
           {overlays}
           {this.props.canvasGrid ? <GridOverlay width={charWidth} height={charHeight} color={gridColor}   /> : null}
-          {this.props.cursorMode ?
+          {keyboardCursor &&
+            this.props.cursorPos.row < charHeight && this.props.cursorPos.col < charWidth ?
+            <CursorCharPreview
+              charPos={this.props.cursorPos}
+              screencode={this.props.curScreencode}
+              color={this.props.textColor}
+              backgroundColor={backg}
+              colorPalette={this.props.colorPalette}
+              font={this.props.font}
+            /> :
+            null}
+          {this.props.cursorMode || keyboardCursor ?
             <CharPosOverlay
               framebufWidth={this.props.framebufWidth}
               framebufHeight={this.props.framebufHeight}
@@ -1321,7 +1375,8 @@ class Editor extends Component<EditorProps & EditorDispatch> {
         charWidth: this.props.framebuf.width,
         charHeight: this.props.framebuf.height
       },
-      canvasFit: this.props.framebufUIState.canvasFit
+      canvasFit: this.props.framebufUIState.canvasFit,
+      pad: petOnly ? { right: 450, bottom: 60 } : undefined
     });
 
     const framebufStyle = {
@@ -1331,7 +1386,9 @@ class Editor extends Component<EditorProps & EditorDispatch> {
       borderStyle: 'solid',
       borderWidth: `${16}px` // TODO scale border width
     };
-    const scaleX = 1.8;
+    // The PET-only build has no color picker, and a character selector
+    // that's 1.5x the size.
+    const scaleX = petOnly ? 2.7 : 1.8;
     const scaleY = scaleX;
     const fbContainerClass =
       classNames(styles.fbContainer, this.props.selectedTool == Tool.PanZoom ? styles.panzoom : null);
@@ -1365,16 +1422,17 @@ class Editor extends Component<EditorProps & EditorDispatch> {
           />
         </div>
         <div style={{marginLeft: '8px', marginRight: '16px'}}>
-          <div style={{marginBottom: '10px'}}>
-            <ColorPicker
-              selected={this.props.textColor}
-              paletteRemap={this.props.paletteRemap}
-              colorPalette={colorPalette}
-              onSelectColor={this.handleSetColor}
-              twoRows={true}
-              scale={{scaleX, scaleY}}
-            />
-          </div>
+          {petOnly ? null :
+            <div style={{marginBottom: '10px'}}>
+              <ColorPicker
+                selected={this.props.textColor}
+                paletteRemap={this.props.paletteRemap}
+                colorPalette={colorPalette}
+                onSelectColor={this.handleSetColor}
+                twoRows={true}
+                scale={{scaleX, scaleY}}
+              />
+            </div>}
           <CharSelect canvasScale={{scaleX, scaleY}}/>
         </div>
       </div>

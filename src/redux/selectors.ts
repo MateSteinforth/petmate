@@ -62,16 +62,31 @@ export const getROMFontBits = (charset: string): Font => {
 // called with the same value.
 const getROMFontBitsMemoized = memoize(getROMFontBits)
 
-export const getFramebufFont = (state: RootState, framebuf: Framebuf): { charset: string, font: Font } => {
-  if (ROM_CHARSETS.includes(framebuf.charset)) {
-    return {
-      charset: framebuf.charset,
-      font: getROMFontBitsMemoized(framebuf.charset)
-    };
+// A font with the user's custom character selector layout applied.  Cached
+// per charset so that the font object stays the same until either changes.
+const layoutFontCache: { [charset: string]: { base: Font, layout: number[], font: Font } } = {}
+
+function withCharLayout (charset: string, base: Font, layout: number[]|undefined): Font {
+  if (layout === undefined) {
+    return base
   }
+  const cached = layoutFontCache[charset]
+  if (cached !== undefined && cached.base === base && cached.layout === layout) {
+    return cached.font
+  }
+  const font = { bits: base.bits, charOrder: layout }
+  layoutFontCache[charset] = { base, layout, font }
+  return font
+}
+
+export const getFramebufFont = (state: RootState, framebuf: Framebuf): { charset: string, font: Font } => {
+  const { charset } = framebuf
+  const base = ROM_CHARSETS.includes(charset) ?
+    getROMFontBitsMemoized(charset) :
+    state.customFonts[charset].font
   return {
-    charset: framebuf.charset,
-    font: state.customFonts[framebuf.charset].font
+    charset,
+    font: withCharLayout(charset, base, state.settings.saved.charLayouts[charset])
   };
 }
 
@@ -95,7 +110,11 @@ const rowColFromScreencodeMemoized = memoize(rowColFromScreencodeMemoized_)
 
 const computeScreencodeWithTransform = (rowcol: Coord2, font: Font, transform: Transform) => {
   const sc = charScreencodeFromRowCol(font, rowcol)
-  return findTransformedChar(font, sc!, transform)
+  if (sc === null) {
+    // An empty place of a custom layout; nothing sensible is selected.
+    return 0x20
+  }
+  return findTransformedChar(font, sc, transform)
 }
 const computeScreencodeWithTransformMemoized = memoize(computeScreencodeWithTransform)
 export const getScreencodeWithTransform = (rowcol: Coord2, font: Font, transform: Transform) => {

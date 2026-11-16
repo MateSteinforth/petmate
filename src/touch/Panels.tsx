@@ -12,6 +12,7 @@ import { getSettingsCurrentColorPalette, getSettingsPaletteRemap } from '../redu
 import { RootState, Tool, Font, Rgb, Coord2 } from '../redux/types'
 import * as utils from '../utils'
 import * as fp from '../utils/fp'
+import { petOnly } from '../utils/platform'
 
 import { transformCharOrBrush, pickAtCursor, moveCursor, CharTransformKind } from './actions'
 import * as icons from './icons'
@@ -131,7 +132,12 @@ function ModifierButton (props: {
 //---------------------------------------------------------------------
 // Tools
 
-const tools = [
+const tools = petOnly ? [
+  // PET screens have no color, so there's just the one drawing tool.
+  { tool: Tool.CharDraw, label: 'Draw', Icon: icons.DrawIcon },
+  { tool: Tool.Brush, label: 'Brush', Icon: icons.BrushIcon },
+  { tool: Tool.Text, label: 'Text', Icon: icons.TextIcon }
+] : [
   { tool: Tool.Draw, label: 'Draw', Icon: icons.DrawIcon },
   { tool: Tool.Colorize, label: 'Color', Icon: icons.ColorizeIcon },
   { tool: Tool.CharDraw, label: 'Char', Icon: icons.CharIcon },
@@ -316,12 +322,15 @@ export const Palette = connect(
 //---------------------------------------------------------------------
 // Character picker
 
-const charsetNames = [
-  { id: 'upper', name: 'C64 ABC' },
-  { id: 'lower', name: 'C64 abc' },
+const petCharsetNames = [
   { id: 'petUpper', name: 'PET ABC' },
   { id: 'petLower', name: 'PET abc' }
 ];
+
+const charsetNames = petOnly ? petCharsetNames : [
+  { id: 'upper', name: 'C64 ABC' },
+  { id: 'lower', name: 'C64 abc' }
+].concat(petCharsetNames);
 
 function CharPicker_ (props: ReturnType<typeof currentCharState> & {
   selected: Coord2,
@@ -333,12 +342,14 @@ function CharPicker_ (props: ReturnType<typeof currentCharState> & {
 }) {
   const { ref, size } = useElementSize<HTMLDivElement>();
   const { font, textColor } = props;
+  // A custom layout (see utils.isValidCharLayout) has an extra row.
+  const rows = Math.ceil(font.charOrder.length / 16);
   const fb = useMemo(() => {
-    return fp.mkArray(16, y => fp.mkArray(16, x => ({
-      code: utils.charScreencodeFromRowCol(font, { row: y, col: x })!,
-      color: textColor
-    })));
-  }, [font, textColor]);
+    return fp.mkArray(rows, y => fp.mkArray(16, x => {
+      const code = utils.charScreencodeFromRowCol(font, { row: y, col: x });
+      return { code: code !== null ? code : 0x20, color: textColor };
+    }));
+  }, [font, textColor, rows]);
 
   const down = useRef<{ x: number, y: number } | null>(null);
   const handlePointerDown = useCallback((e: React.PointerEvent) => {
@@ -356,8 +367,8 @@ function CharPicker_ (props: ReturnType<typeof currentCharState> & {
     }
     const bbox = e.currentTarget.getBoundingClientRect();
     const col = Math.floor((e.clientX - bbox.left) / bbox.width * 16);
-    const row = Math.floor((e.clientY - bbox.top) / bbox.height * 16);
-    if (row >= 0 && row < 16 && col >= 0 && col < 16) {
+    const row = Math.floor((e.clientY - bbox.top) / bbox.height * rows);
+    if (col >= 0 && col < 16 && utils.charScreencodeFromRowCol(font, { row, col }) !== null) {
       props.setCurrentChar({ row, col });
       if (props.onPicked) {
         props.onPicked();
@@ -367,7 +378,7 @@ function CharPicker_ (props: ReturnType<typeof currentCharState> & {
 
   const scale = size !== null ? size.width / (16 * 9) : 1;
   const bg = utils.colorIndexToCssRgb(props.colorPalette, props.backgroundColor);
-  const charsets = charsetNames.concat(props.customFonts);
+  const charsets = petOnly ? charsetNames : charsetNames.concat(props.customFonts);
   return (
     <div className={styles.charSection}>
       <div className={styles.sectionHeader}>
@@ -388,14 +399,14 @@ function CharPicker_ (props: ReturnType<typeof currentCharState> & {
         {size !== null ?
           <div
             className={styles.charGrid}
-            style={{ width: size.width, height: 16 * 9 * scale, backgroundColor: bg }}
+            style={{ width: size.width, height: rows * 9 * scale, backgroundColor: bg }}
             onPointerDown={handlePointerDown}
             onPointerUp={handlePointerUp}
           >
-            <div style={{ width: 16 * 9, height: 16 * 9, transform: `scale(${scale})`, transformOrigin: '0 0', position: 'relative' }}>
+            <div style={{ width: 16 * 9, height: rows * 9, transform: `scale(${scale})`, transformOrigin: '0 0', position: 'relative' }}>
               <CharGrid
                 width={16}
-                height={16}
+                height={rows}
                 grid={true}
                 backgroundColor={bg}
                 framebuf={fb}

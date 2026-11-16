@@ -12,7 +12,7 @@ import ImportModal from './ImportModal'
 import Editor from './Editor';
 import FileDrop from './FileDrop'
 import TouchApp, { isTouchLayout, WebMenuButton } from '../touch/TouchApp'
-import { isElectron } from '../utils/platform'
+import { isElectron, petOnly } from '../utils/platform'
 
 import * as reduxToolbar from '../redux/toolbar'
 import { loadWorkspaceNoDialog } from '../utils'
@@ -80,6 +80,8 @@ class DivSize extends Component<DivSizeProps, DivSizeState> {
   }
 }
 
+const cursorKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Backspace'];
+
 interface AppViewProps {
   Toolbar: reduxToolbar.PropsFromDispatch;
   dispatch: Dispatch
@@ -99,6 +101,14 @@ class AppView extends Component<AppViewProps> {
   }
 
   handleKeyDown = (event: KeyboardEvent) => {
+    if (petOnly && cursorKeys.indexOf(event.key) !== -1 && !event.metaKey && !event.ctrlKey) {
+      // These drive the canvas cursor, keep them from also scrolling the
+      // page, flipping the charset selector or navigating back.
+      const tag = event.target instanceof HTMLElement ? event.target.tagName : '';
+      if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+        event.preventDefault();
+      }
+    }
     this.props.Toolbar.keyDown(event.key)
   }
 

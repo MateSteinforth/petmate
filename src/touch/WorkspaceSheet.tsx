@@ -16,6 +16,7 @@ import { arrayMove } from '../external/react-sortable-hoc'
 import * as utils from '../utils'
 import * as fp from '../utils/fp'
 import { runMenuCommand } from '../menuCommands'
+import { petOnly } from '../utils/platform'
 
 import * as icons from './icons'
 import styles from './Touch.module.css'
@@ -254,20 +255,22 @@ function WorkspaceSheet_ (props: WorkspaceSheetProps) {
           <div>
             <div className={styles.caption}>Screen</div>
             <div className={styles.group}>
-              <div className={styles.swatchLabel}>Border</div>
-              <Swatches
-                colorPalette={props.colorPalette}
-                paletteRemap={props.paletteRemap}
-                selected={framebuf.borderColor}
-                onSelect={c => props.Framebuffer.setBorderColor(c, framebufIndex)}
-              />
-              <div className={styles.swatchLabel}>Background</div>
-              <Swatches
-                colorPalette={props.colorPalette}
-                paletteRemap={props.paletteRemap}
-                selected={framebuf.backgroundColor}
-                onSelect={c => props.Framebuffer.setBackgroundColor(c, framebufIndex)}
-              />
+              {petOnly ? null : <>
+                <div className={styles.swatchLabel}>Border</div>
+                <Swatches
+                  colorPalette={props.colorPalette}
+                  paletteRemap={props.paletteRemap}
+                  selected={framebuf.borderColor}
+                  onSelect={c => props.Framebuffer.setBorderColor(c, framebufIndex)}
+                />
+                <div className={styles.swatchLabel}>Background</div>
+                <Swatches
+                  colorPalette={props.colorPalette}
+                  paletteRemap={props.paletteRemap}
+                  selected={framebuf.backgroundColor}
+                  onSelect={c => props.Framebuffer.setBackgroundColor(c, framebufIndex)}
+                />
+              </>}
               <div className={styles.row}>
                 <span className={styles.label}>Shift contents</span>
                 <div className={styles.shiftButtons}>
@@ -298,10 +301,11 @@ function WorkspaceSheet_ (props: WorkspaceSheetProps) {
           </div>
         </div>
 
-        <div className={styles.group}>
-          <Row label='Custom fonts' chevron onClick={() => run('custom-fonts')} />
-          <Row label='Preferences' chevron onClick={() => run('preferences')} />
-        </div>
+        {petOnly ? null :
+          <div className={styles.group}>
+            <Row label='Custom fonts' chevron onClick={() => run('custom-fonts')} />
+            <Row label='Preferences' chevron onClick={() => run('preferences')} />
+          </div>}
 
         <p className={styles.footnote}>Your workspace is autosaved on this device.</p>
       </>

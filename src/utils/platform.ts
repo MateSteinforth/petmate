@@ -27,6 +27,24 @@ const mimeTypes: { [ext: string]: string } = {
   '.bas': 'text/plain'
 };
 
+// The web build is a reduced, Commodore PET-only editor: green characters
+// on a black screen, PET charsets only, and no color tools.  The Electron
+// app keeps the full C64 feature set.
+export const petOnly: boolean = !isElectron;
+
+// Should the touch UI be used instead of the desktop one?  `?touch` in the
+// URL forces it on for testing in a desktop browser, `?desktop` off.
+export function isTouchLayout(): boolean {
+  const params = new URLSearchParams(window.location.search);
+  if (params.has('touch')) {
+    return true;
+  }
+  if (params.has('desktop')) {
+    return false;
+  }
+  return window.matchMedia('(pointer: coarse)').matches;
+}
+
 export function isTouchDevice(): boolean {
   return typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0;
 }

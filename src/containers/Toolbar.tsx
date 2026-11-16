@@ -20,6 +20,7 @@ import { framebufIndexMergeProps } from '../redux/utils'
 import { Tool, Rgb, RootState, FramebufUIState } from '../redux/types';
 
 import { withHoverFade } from './hoc'
+import { petOnly } from '../utils/platform'
 
 import {
   faBrush, faPencilAlt, faFont, faUndo, faRedo, faBroom, faCog, faArrowsAlt, faTv
@@ -315,7 +316,14 @@ class ToolbarView extends Component<
         />
       )
     }
-    const tools = [
+    // PET screens have no color: one drawing tool, char only.
+    const drawTools = petOnly ? [
+      mkTool({
+        tool: Tool.CharDraw,
+        iconName: faPencilAlt,
+        tooltip: 'Draw'
+      })
+    ] : [
       mkTool({
         tool: Tool.Draw,
         iconName: faPencilAlt,
@@ -332,7 +340,10 @@ class ToolbarView extends Component<
         iconName: faPencilAlt,
         tooltip: 'Char only',
         subIcon: renderCharSubIcon
-      }),
+      })
+    ]
+    const tools = [
+      ...drawTools,
       mkTool({
         tool: Tool.Brush,
         iconName: faBrush,
@@ -373,32 +384,34 @@ class ToolbarView extends Component<
           tooltip='CRT (P)'
         />
 
-        <FbColorPicker
-          pickerId='border'
-          containerClassName={styles.tooltip}
-          active={this.state.pickerActive.border}
-          color={this.props.borderColor!}
-          onSetActive={this.setPickerActive}
-          onSelectColor={this.handleSelectBorderColor}
-          paletteRemap={this.props.paletteRemap}
-          colorPalette={this.props.colorPalette}
-          tooltip='Border'
-        />
-        <FbColorPicker
-          pickerId='background'
-          containerClassName={styles.tooltip}
-          active={this.state.pickerActive.background}
-          color={this.props.backgroundColor}
-          onSetActive={this.setPickerActive}
-          onSelectColor={this.handleSelectBgColor}
-          paletteRemap={this.props.paletteRemap}
-          colorPalette={this.props.colorPalette}
-          tooltip='Background'
-        />
-        <Icon
-          bottom={true}
-          onIconClick={() => this.props.Toolbar.setShowSettings(true)}
-          iconName={faCog} tooltip='Preferences'/>
+        {petOnly ? null : <Fragment>
+          <FbColorPicker
+            pickerId='border'
+            containerClassName={styles.tooltip}
+            active={this.state.pickerActive.border}
+            color={this.props.borderColor!}
+            onSetActive={this.setPickerActive}
+            onSelectColor={this.handleSelectBorderColor}
+            paletteRemap={this.props.paletteRemap}
+            colorPalette={this.props.colorPalette}
+            tooltip='Border'
+          />
+          <FbColorPicker
+            pickerId='background'
+            containerClassName={styles.tooltip}
+            active={this.state.pickerActive.background}
+            color={this.props.backgroundColor}
+            onSetActive={this.setPickerActive}
+            onSelectColor={this.handleSelectBgColor}
+            paletteRemap={this.props.paletteRemap}
+            colorPalette={this.props.colorPalette}
+            tooltip='Background'
+          />
+          <Icon
+            bottom={true}
+            onIconClick={() => this.props.Toolbar.setShowSettings(true)}
+            iconName={faCog} tooltip='Preferences'/>
+        </Fragment>}
       </div>
     )
   }

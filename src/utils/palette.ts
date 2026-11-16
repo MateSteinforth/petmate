@@ -53,6 +53,12 @@ const vice = [
   "#b6b6b6","#dcfea3","#b1a0fc","#e0e0e0"
 ];
 
+// Web (PET-only) build: a monochrome green phosphor.  Every color index but
+// black maps to the same green, so a screen is green on black no matter
+// what colors it was saved with.
+const petGreen: Rgb = {r:0x33, g:0xff, b:0x55};
+export const petPalette: Rgb[] = palette.map((c, idx) => idx === 0 ? c : petGreen);
+
 export const colorPalettes: {[k in PaletteName]: Rgb[]} = {
   'petmate': palette,
   'colodore': colodore.map(hexToRgb),

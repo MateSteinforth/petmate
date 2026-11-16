@@ -74,6 +74,9 @@ export interface Settings {
   palettes: number[][];
   selectedColorPalette: PaletteName;
   integerScale: boolean;
+  // Custom arrangements of the character selector, by charset.  See
+  // utils.isValidCharLayout.
+  charLayouts: { [charset: string]: number[] };
 };
 
 export interface Screens {

@@ -16,6 +16,7 @@ import * as screensSelectors from '../redux/screensSelectors'
 import { RootState } from '../redux/types'
 import * as utils from '../utils'
 import * as fp from '../utils/fp'
+import { isTouchLayout, petOnly } from '../utils/platform'
 
 import { ToolButtons, CharActions, Palette, CharPicker, CursorDock, useElementSize } from './Panels'
 import WorkspaceSheet from './WorkspaceSheet'
@@ -26,18 +27,7 @@ import styles from './Touch.module.css'
 // Narrower than this gets the phone layout: canvas on top, docks below.
 const TABLET_MIN_WIDTH = 768;
 
-// Should the touch UI be used instead of the desktop one?  `?touch` in the
-// URL forces it on for testing in a desktop browser, `?desktop` off.
-export function isTouchLayout(): boolean {
-  const params = new URLSearchParams(window.location.search);
-  if (params.has('touch')) {
-    return true;
-  }
-  if (params.has('desktop')) {
-    return false;
-  }
-  return window.matchMedia('(pointer: coarse)').matches;
-}
+export { isTouchLayout };
 
 function useWindowSize() {
   const [size, setSize] = useState({ width: window.innerWidth, height: window.innerHeight });
@@ -265,7 +255,7 @@ function TouchApp_ (props: TouchAppProps) {
           <Canvas style={{ flex: 1, minWidth: 0 }} borderWidth={16} />
           <div className={styles.sidePanel}>
             <CharActions showModifiers={false} />
-            <Palette grid={true} />
+            {petOnly ? null : <Palette grid={true} />}
             <CharPicker />
             {props.cursorMode ? <CursorDock compact={false} onShowAllChars={() => {}} /> : null}
           </div>
@@ -289,12 +279,12 @@ function TouchApp_ (props: TouchAppProps) {
       <Canvas style={{ flex: 'none', height: canvasHeight }} borderWidth={border} />
       {props.cursorMode ?
         <>
-          <Palette grid={false} />
+          {petOnly ? null : <Palette grid={false} />}
           <CursorDock compact={true} onShowAllChars={() => setShowChars(true)} />
         </> :
         <>
           <CharActions showModifiers={true} />
-          <Palette grid={false} />
+          {petOnly ? null : <Palette grid={false} />}
           <CharPicker />
         </>}
       <ToolButtons vertical={false} />

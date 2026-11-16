@@ -1,7 +1,7 @@
 
 import { bindActionCreators, Dispatch } from 'redux'
 
-import { Framebuffer } from './editor'
+import { Framebuffer, DEFAULT_TEXT_COLOR } from './editor'
 import * as Screens from './screens'
 import { Toolbar as IToolbar, Transform, RootStateThunk, Coord2, Pixel, BrushRegion, Font, Brush, Tool, Angle360, FramebufUIState, DEFAULT_FB_WIDTH, DEFAULT_FB_HEIGHT } from './types'
 
@@ -14,7 +14,9 @@ import * as utils from '../utils'
 import * as brush from './brush'
 import { ActionsUnion, createAction, updateField, DispatchPropsFromActions } from './typeUtils'
 import { FileFormat } from './typesExport';
+import * as settings from './settings';
 import * as matrix from '../utils/matrix';
+import { petOnly } from '../utils/platform';
 
 const defaultFramebufUIState: FramebufUIState = {
   canvasTransform: matrix.ident(),
@@ -65,6 +67,42 @@ function moveTextCursor(curPos: Coord2, dir: Coord2, width: number, height: numb
   return {
     row: Math.floor(wrapped / width),
     col: Math.floor(wrapped % width)
+  }
+}
+
+// PET-only build: the keys that drive the canvas cursor.
+const cursorKeyDirs: {[key: string]: Coord2} = {
+  ArrowLeft: { row: 0, col: -1 },
+  ArrowRight: { row: 0, col: 1 },
+  ArrowUp: { row: -1, col: 0 },
+  ArrowDown: { row: 1, col: 0 }
+}
+
+function clampToScreen(pos: Coord2, width: number, height: number): Coord2 {
+  return {
+    row: Math.max(0, Math.min(height - 1, pos.row)),
+    col: Math.max(0, Math.min(width - 1, pos.col))
+  }
+}
+
+// PET screens have no per-character color, so the tools that paint color
+// collapse into the char-only drawing tool.
+function petTool(tool: Tool): Tool {
+  return petOnly && (tool === Tool.Draw || tool === Tool.Colorize) ? Tool.CharDraw : tool
+}
+
+// Step the character selector's cursor, skipping over the empty places of
+// a custom layout.  Stays put if there's no char left in that direction.
+function nextCharPos(pos: Coord2, dir: Coord2, font: Font): Coord2 {
+  let next = pos
+  for (;;) {
+    next = { row: next.row + dir.row, col: next.col + dir.col }
+    if (next.row < 0 || next.row >= utils.CHAR_LAYOUT_ROWS || next.col < 0 || next.col >= 16) {
+      return pos
+    }
+    if (utils.charScreencodeFromRowCol(font, next) !== null) {
+      return next
+    }
   }
 }
 
@@ -260,6 +298,35 @@ export class Toolbar {
         }
 
         let inTextInput = selectedTool === Tool.Text && state.toolbar.textCursorPos !== null
+
+        // PET-only build: the canvas has a permanent cursor.  The arrow keys
+        // move it, space puts down the selected character and backspace
+        // clears the cell.  (While typing with the text tool, these keys
+        // belong to the text cursor.)
+        if (petOnly && noMods && !altKey && !inTextInput && framebufIndex !== null) {
+          const cursorPos = clampToScreen(state.toolbar.cursorPos, width, height)
+          const dir = cursorKeyDirs[key]
+          if (dir !== undefined) {
+            dispatch(Toolbar.actions.setCursorPos(clampToScreen({
+              row: cursorPos.row + dir.row,
+              col: cursorPos.col + dir.col
+            }, width, height)))
+            return
+          }
+          if (key === ' ' || key === 'Backspace') {
+            const { font } = selectors.getCurrentFramebufFont(state)
+            const screencode = key === ' ' ?
+              selectors.getScreencodeWithTransform(state.toolbar.selectedChar, font, state.toolbar.charTransform) :
+              0x20
+            const fb = selectors.getFramebufByIndex(state, framebufIndex)!
+            // Skip no-op edits so that key repeat doesn't pile up undo steps.
+            if (fb.framebuf[cursorPos.row][cursorPos.col].code !== screencode) {
+              dispatch(Framebuffer.actions.setPixel({ ...cursorPos, screencode }, state.toolbar.undoId, framebufIndex))
+              dispatch(Toolbar.actions.incUndoId())
+            }
+            return
+          }
+        }
         // These shortcuts should work regardless of what drawing tool is selected.
         if (noMods) {
           if (!inTextInput) {
@@ -503,6 +570,39 @@ export class Toolbar {
       }
     },
 
+    // Character selector drag & drop: move the char at `from` to `to`.  If
+    // there's a char at `to` already, the two swap places.
+    moveChar: (from: Coord2, to: Coord2): RootStateThunk => {
+      return (dispatch, getState) => {
+        const state = getState()
+        const { charset, font } = selectors.getCurrentFramebufFont(state)
+        const layout = utils.charLayoutOf(font)
+        const fromIdx = from.row*16 + from.col
+        const toIdx = to.row*16 + to.col
+        if (fromIdx === toIdx || layout[fromIdx] === undefined || layout[toIdx] === undefined ||
+            layout[fromIdx] === utils.EMPTY_CHAR) {
+          return
+        }
+        const selected = selectors.getScreencodeWithTransform(state.toolbar.selectedChar, font, state.toolbar.charTransform)
+        const tmp = layout[fromIdx]
+        layout[fromIdx] = layout[toIdx]
+        layout[toIdx] = tmp
+        dispatch(settings.actions.setCharLayouts({ [charset]: layout }))
+        // The selection is a position: keep it on the same char.
+        dispatch(Toolbar.actions.setScreencode(selected))
+      }
+    },
+
+    resetCharLayout: (): RootStateThunk => {
+      return (dispatch, getState) => {
+        const state = getState()
+        const { charset, font } = selectors.getCurrentFramebufFont(state)
+        const selected = selectors.getScreencodeWithTransform(state.toolbar.selectedChar, font, state.toolbar.charTransform)
+        dispatch(settings.actions.setCharLayouts({ [charset]: null }))
+        dispatch(Toolbar.actions.setScreencode(selected))
+      }
+    },
+
     setCurrentScreencodeAndColor: (pix: Pixel): RootStateThunk => {
       return (dispatch, getState) => {
         const state = getState()
@@ -540,9 +640,9 @@ export class Toolbar {
       selectedChar: {row: 8, col: 0},
       charTransform: emptyTransform,
       undoId: 0,
-      textColor: 14,
+      textColor: DEFAULT_TEXT_COLOR,
       textCursorPos: null as (Coord2|null),
-      selectedTool: Tool.Draw,
+      selectedTool: petTool(Tool.Draw),
       brushRegion: null as (BrushRegion|null),
       brush: null as (Brush|null),
       workspaceFilename: null as (string|null),
@@ -589,10 +689,7 @@ export class Toolbar {
         const rc = selectors.getCharRowColWithTransform(state.selectedChar, font, state.charTransform)
         return {
           ...state,
-          selectedChar: {
-            row: Math.max(0, Math.min(15, rc.row + dir.row)),
-            col: Math.max(0, Math.min(15, rc.col + dir.col)),
-          },
+          selectedChar: nextCharPos(rc, dir, font),
           charTransform: emptyTransform
         }
       }
@@ -607,6 +704,9 @@ export class Toolbar {
         }
       }
       case NEXT_COLOR: {
+        if (petOnly) {
+          return state
+        }
         const remap = action.data.paletteRemap;
         const idx = remap.indexOf(state.textColor);
         const dir = action.data.dir;
@@ -659,11 +759,12 @@ export class Toolbar {
           shiftKey: false
         }
       case 'Toolbar/SET_TEXT_COLOR':
-        return updateField(state, 'textColor', action.data);
+        // The PET-only build draws in its one color only.
+        return petOnly ? state : updateField(state, 'textColor', action.data);
       case 'Toolbar/SET_TEXT_CURSOR_POS':
         return updateField(state, 'textCursorPos', action.data);
       case 'Toolbar/SET_SELECTED_TOOL':
-        return updateField(state, 'selectedTool', action.data);
+        return updateField(state, 'selectedTool', petTool(action.data));
       case 'Toolbar/SET_BRUSH_REGION':
         return updateField(state, 'brushRegion', action.data);
       case 'Toolbar/SET_BRUSH':

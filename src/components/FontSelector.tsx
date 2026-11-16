@@ -2,6 +2,8 @@
 // @flow
 import React, { PureComponent } from 'react';
 
+import { petOnly } from '../utils/platform';
+
 class CustomFontSelect extends React.Component<{
   customFonts: {id: string, name: string}[],
   current: string,
@@ -14,15 +16,7 @@ class CustomFontSelect extends React.Component<{
   }
 
   render () {
-    const charsets = [
-      {
-        id: 'upper',
-        name: 'ABC'
-      },
-      {
-        id: 'lower',
-        name: 'abc'
-      },
+    const petCharsets = [
       {
         id: 'petUpper',
         name: 'PET ABC'
@@ -31,7 +25,17 @@ class CustomFontSelect extends React.Component<{
         id: 'petLower',
         name: 'PET abc'
       }
-    ].concat(this.props.customFonts);
+    ];
+    const charsets = petOnly ? petCharsets : [
+      {
+        id: 'upper',
+        name: 'ABC'
+      },
+      {
+        id: 'lower',
+        name: 'abc'
+      }
+    ].concat(petCharsets, this.props.customFonts);
     const options = charsets.map(cf => {
       let displayName = cf.name;
       return (

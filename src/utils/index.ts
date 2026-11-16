@@ -151,16 +151,64 @@ export function luminance (color: Rgb): number {
 export const charOrderUpper = [ 32, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 46, 44, 59, 33, 63, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 34, 35, 36, 37, 38, 39, 112, 110, 108, 123, 85, 73, 79, 80, 113, 114, 40, 41, 60, 62, 78, 77, 109, 125, 124, 126, 74, 75, 76, 122, 107, 115, 27, 29, 31, 30, 95, 105, 100, 111, 121, 98, 120, 119, 99, 116, 101, 117, 97, 118, 103, 106, 91, 43, 82, 70, 64, 45, 67, 68, 69, 84, 71, 66, 93, 72, 89, 47, 86, 42, 61, 58, 28, 0, 127, 104, 92, 102, 81, 87, 65, 83, 88, 90, 94, 96, 160, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 174, 172, 187, 161, 191, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 162, 163, 164, 165, 166, 167, 240, 238, 236, 251, 213, 201, 207, 208, 241, 242, 168, 169, 188, 190, 206, 205, 237, 253, 252, 254, 202, 203, 204, 250, 235, 243, 155, 157, 159, 158, 223, 233, 228, 239, 249, 226, 248, 247, 227, 244, 229, 245, 225, 246, 231, 234, 219, 171, 210, 198, 192, 173, 195, 196, 197, 212, 199, 194, 221, 200, 217, 175, 214, 170, 189, 186, 156, 128, 255, 232, 220, 230, 209, 215, 193, 211, 216, 218, 222, 224 ]
 export const charOrderLower = [ 32, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 46, 44, 59, 33, 63, 96, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 34, 35, 36, 37, 38, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 43, 45, 42, 61, 39, 0, 112, 110, 108, 123, 113, 114, 40, 41, 95, 105, 92, 127, 60, 62, 28, 47, 109, 125, 124, 126, 107, 115, 27, 29, 94, 102, 104, 58, 30, 31, 91, 122, 100, 111, 121, 98, 99, 119, 120, 101, 116, 117, 97, 103, 106, 118, 64, 93, 160, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 140, 141, 142, 143, 144, 145, 146, 147, 148, 149, 150, 151, 152, 153, 154, 174, 172, 187, 161, 191, 224, 193, 194, 195, 196, 197, 198, 199, 200, 201, 202, 203, 204, 205, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 162, 163, 164, 165, 166, 176, 177, 178, 179, 180, 181, 182, 183, 184, 185, 171, 173, 170, 189, 167, 128, 240, 238, 236, 251, 241, 242, 168, 169, 223, 233, 220, 255, 188, 190, 156, 175, 237, 253, 252, 254, 235, 243, 155, 157, 222, 230, 232, 186, 158, 159, 219, 250, 228, 239, 249, 226, 227, 247, 248, 229, 244, 245, 225, 231, 234, 246, 192, 221 ]
 
+// The character selector shows a font's chars in the order of its
+// `charOrder`.  The user can rearrange them: a custom layout is a charOrder
+// with CHAR_LAYOUT_ROWS rows of 16 that holds every screencode exactly once
+// and EMPTY_CHAR in its unused places.
+export const CHAR_LAYOUT_ROWS = 17
+export const EMPTY_CHAR = -1
+
+export type CharLayouts = { [charset: string]: number[] };
+
+export function isValidCharLayout(layout: any): layout is number[] {
+  if (!Array.isArray(layout) || layout.length !== CHAR_LAYOUT_ROWS*16) {
+    return false
+  }
+  const seen = Array(256).fill(false)
+  for (const c of layout) {
+    if (c === EMPTY_CHAR) {
+      continue
+    }
+    if (!Number.isInteger(c) || c < 0 || c > 255 || seen[c]) {
+      return false
+    }
+    seen[c] = true
+  }
+  return seen.every(s => s)
+}
+
+// Keep only the valid layouts of a charset -> layout map read from a file.
+export function validCharLayouts(layouts: any): CharLayouts {
+  const res: CharLayouts = {}
+  if (layouts !== null && typeof layouts === 'object') {
+    Object.keys(layouts).forEach(charset => {
+      if (isValidCharLayout(layouts[charset])) {
+        res[charset] = layouts[charset]
+      }
+    })
+  }
+  return res
+}
+
+// A font's char order padded with empty places to the full selector size.
+export function charLayoutOf(font: Font): number[] {
+  const layout = font.charOrder.slice(0, CHAR_LAYOUT_ROWS*16)
+  while (layout.length < CHAR_LAYOUT_ROWS*16) {
+    layout.push(EMPTY_CHAR)
+  }
+  return layout
+}
+
+// Returns null for positions outside the selector and for empty places.
 export const charScreencodeFromRowCol = (font: Font, {row, col}: Coord2) => {
   if (font === null) {
     return 0xa0
   }
-  if (row < 0 || row >= 16 ||
-      col < 0 || col >= 16) {
+  if (row < 0 || col < 0 || col >= 16) {
     return null
   }
-  const idx = row*16 + col
-  return font.charOrder[idx]
+  const code = font.charOrder[row*16 + col]
+  return code === undefined || code === EMPTY_CHAR ? null : code
 }
 
 export const rowColFromScreencode = (font: Font, code: number) => {
@@ -240,7 +288,8 @@ const WORKSPACE_VERSION = 2;
 export function workspaceToJson (
   screens: number[],
   getFramebufById: GetFramebufByIdFunc,
-  customFonts: customFonts.CustomFonts
+  customFonts: customFonts.CustomFonts,
+  charLayouts: CharLayouts
 ): string {
   return JSON.stringify({
     version: WORKSPACE_VERSION,
@@ -251,7 +300,9 @@ export function workspaceToJson (
         ...framebufFields(getFramebufById(fbid))
       }
     }),
-    customFonts: customFontsToJson(customFonts)
+    customFonts: customFontsToJson(customFonts),
+    // The user's arrangement of the character selector
+    charLayouts
   })
 }
 
@@ -260,9 +311,10 @@ export function saveWorkspace (
   screens: number[],
   getFramebufById: GetFramebufByIdFunc,
   customFonts: customFonts.CustomFonts,
+  charLayouts: CharLayouts,
   updateLastSavedSnapshot: () => void
 ) {
-  const content = workspaceToJson(screens, getFramebufById, customFonts)
+  const content = workspaceToJson(screens, getFramebufById, customFonts, charLayouts)
   try {
     fs.writeFileSync(filename, content, 'utf-8');
     updateLastSavedSnapshot();
@@ -373,6 +425,7 @@ export function dialogSaveAsWorkspace(
   screens: number[],
   getFramebufByIndex: (fbidx: number) => Framebuf,
   customFonts: customFonts.CustomFonts,
+  charLayouts: CharLayouts,
   workspaceFilename: string|null,
   setWorkspaceFilename: (fname: string) => void,
   updateLastSavedSnapshot: () => void
@@ -385,7 +438,7 @@ export function dialogSaveAsWorkspace(
     if (filename === undefined) {
       return;
     }
-    saveWorkspace(filename, screens, getFramebufByIndex, customFonts, updateLastSavedSnapshot);
+    saveWorkspace(filename, screens, getFramebufByIndex, customFonts, charLayouts, updateLastSavedSnapshot);
     setWorkspaceFilenameWithTitle(setWorkspaceFilename, filename);
   })
 }

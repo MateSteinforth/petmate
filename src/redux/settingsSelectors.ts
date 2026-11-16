@@ -1,6 +1,8 @@
 
 import { RootState, Settings, PaletteName } from './types'
 import { colorPalettes } from '../utils'
+import { petPalette } from '../utils/palette'
+import { petOnly } from '../utils/platform'
 
 export function getSettings(state: RootState): Settings {
   return state.settings['saved']
@@ -20,7 +22,7 @@ export const getSettingsPaletteRemap = (state: RootState) => {
 }
 
 export const getSettingsColorPaletteByName = (_state: RootState, name: PaletteName) => {
-  return colorPalettes[name];
+  return petOnly ? petPalette : colorPalettes[name];
 }
 
 export const getSettingsCurrentColorPalette = (state: RootState) => {

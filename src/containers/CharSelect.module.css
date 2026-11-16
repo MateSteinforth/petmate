@@ -2,3 +2,13 @@
   cursor: default;
   border-style: none;
 }
+
+.resetLayout {
+  font-size: 0.8em;
+  color: rgb(120,120,120);
+  cursor: pointer;
+}
+
+.resetLayout:hover {
+  color: var(--main-text-color);
+}

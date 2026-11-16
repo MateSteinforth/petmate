@@ -4,6 +4,8 @@ import { ActionCreators } from 'redux-undo';
 import { ThunkAction } from 'redux-thunk';
 
 import * as fp from '../utils/fp'
+import { validCharLayouts } from '../utils'
+import * as rsettings from './settings';
 
 import * as rscreens from './screens';
 import * as rcustomFonts from './customFonts';
@@ -15,6 +17,7 @@ import * as screensSelectors from './screensSelectors';
 interface WorkspaceJson {
   version: number;
   customFonts?: WsCustomFontsV2;
+  charLayouts?: { [charset: string]: number[] };
   screens: number[];
   framebufs: Framebuf[];
 };
@@ -42,6 +45,13 @@ export function load(workspace: WorkspaceJson): ThunkAction<void, RootState, und
       Object.entries(cfonts).forEach(([id, cf]) => {
         dispatch(rcustomFonts.actions.addCustomFont(id, cf.name, cf.font));
       });
+    }
+
+    // A workspace brings along the character selector layout it was made
+    // with; that becomes the current layout.
+    const charLayouts = validCharLayouts(workspace.charLayouts);
+    if (Object.keys(charLayouts).length > 0) {
+      dispatch(rsettings.actions.setCharLayouts(charLayouts));
     }
 
     screens.forEach((fbIdx, screenIdx) => {

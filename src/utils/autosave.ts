@@ -11,6 +11,7 @@ import * as Screens from '../redux/screens'
 import { Toolbar } from '../redux/toolbar'
 import * as selectors from '../redux/selectors'
 import * as screensSelectors from '../redux/screensSelectors'
+import { getSettings } from '../redux/settingsSelectors'
 import { workspaceToJson, setWorkspaceFilenameWithTitle } from '.'
 
 const AUTOSAVE_KEY = 'petmate.autosave'
@@ -52,7 +53,8 @@ function save(state: RootState) {
     workspace: workspaceToJson(
       screens,
       (idx: number) => selectors.getFramebufByIndex(state, idx)!,
-      selectors.getCustomFonts(state)
+      selectors.getCustomFonts(state),
+      getSettings(state).charLayouts
     ),
     filename: state.toolbar.workspaceFilename,
     currentScreen: screensSelectors.getCurrentScreenIndex(state)
@@ -82,6 +84,7 @@ export function start(store: Store<RootState>) {
       prev.framebufList === state.framebufList &&
       prev.screens === state.screens &&
       prev.customFonts === state.customFonts &&
+      prev.settings.saved.charLayouts === state.settings.saved.charLayouts &&
       prev.toolbar.workspaceFilename === state.toolbar.workspaceFilename) {
       return
     }

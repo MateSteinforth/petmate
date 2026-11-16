@@ -1,5 +1,5 @@
 
-import React, { Component, useRef, useCallback, useState, MouseEvent, CSSProperties } from 'react';
+import React, { Component, useRef, useCallback, useState, useMemo, MouseEvent, PointerEvent, CSSProperties } from 'react';
 import { connect } from 'react-redux'
 import { Dispatch, bindActionCreators } from 'redux'
 
@@ -19,6 +19,7 @@ import * as fp from '../utils/fp'
 import * as selectors from '../redux/selectors'
 import * as screensSelectors from '../redux/screensSelectors'
 import {
+  getSettings,
   getSettingsCurrentColorPalette
 } from '../redux/settingsSelectors'
 
@@ -39,7 +40,12 @@ interface CharSelectProps {
   selected: Coord2 | null;
   backgroundColor: number;
   textColor: number;
+  customLayout: boolean;
 }
+
+// A drag has to move this many screen pixels before it picks up the char,
+// anything less is a click.
+const DRAG_START_PX = 4;
 
 // Char position & click hook
 function useCharPos(
@@ -96,11 +102,15 @@ function CharSelectView(props: {
   style: CSSProperties;
 
   fb: Pixel[][];
+  textColor: number;
+  customLayout: boolean;
   onCharSelected: (pos: Coord2|null) => void;
+  onCharMoved: (from: Coord2, to: Coord2) => void;
+  onResetLayout: () => void;
   setCharset: (charset: string) => void;
 }) {
   const W = 16
-  const H = 16
+  const H = utils.CHAR_LAYOUT_ROWS
   const { scaleX, scaleY } = props.canvasScale;
 
   const { charPos, divProps } = useCharPos(W, H, props.selected);
@@ -110,9 +120,74 @@ function CharSelectView(props: {
     screencode = utils.charScreencodeFromRowCol(props.font, charPos);
   }
 
-  let handleOnClick = useCallback(function() {
-    props.onCharSelected(charPos);
-  }, [charPos]);
+  // Clicking a char selects it, dragging it moves it to another place (or
+  // swaps it with the char that's there).  `x` and `y` are in the grid's
+  // unscaled pixels.
+  const down = useRef<{ pos: Coord2, clientX: number, clientY: number } | null>(null);
+  const [drag, setDrag] = useState<{ from: Coord2, x: number, y: number } | null>(null);
+
+  const locate = (e: PointerEvent) => {
+    const bbox = divProps.ref.current!.getBoundingClientRect();
+    const fx = (e.clientX - bbox.left) / bbox.width;
+    const fy = (e.clientY - bbox.top) / bbox.height;
+    const pos = { row: Math.floor(fy * H), col: Math.floor(fx * W) };
+    const inside = pos.row >= 0 && pos.row < H && pos.col >= 0 && pos.col < W;
+    return { pos: inside ? pos : null, x: fx * W * 9, y: fy * H * 9 };
+  };
+
+  const handlePointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    if (e.button !== 0) {
+      return;
+    }
+    const { pos } = locate(e);
+    if (pos === null) {
+      return;
+    }
+    e.currentTarget.setPointerCapture(e.pointerId);
+    down.current = { pos, clientX: e.clientX, clientY: e.clientY };
+  };
+
+  const handlePointerMove = (e: PointerEvent<HTMLDivElement>) => {
+    const d = down.current;
+    if (d === null) {
+      return;
+    }
+    if (drag === null) {
+      const moved = Math.hypot(e.clientX - d.clientX, e.clientY - d.clientY);
+      if (moved < DRAG_START_PX || utils.charScreencodeFromRowCol(props.font, d.pos) === null) {
+        return;
+      }
+    }
+    const { x, y } = locate(e);
+    setDrag({ from: d.pos, x, y });
+  };
+
+  const handlePointerUp = (e: PointerEvent<HTMLDivElement>) => {
+    const d = down.current;
+    down.current = null;
+    if (d === null) {
+      return;
+    }
+    const { pos } = locate(e);
+    if (drag !== null) {
+      setDrag(null);
+      if (pos !== null) {
+        props.onCharMoved(drag.from, pos);
+      }
+    } else if (pos !== null && utils.charScreencodeFromRowCol(props.font, pos) !== null) {
+      props.onCharSelected(pos);
+    }
+  };
+
+  const handlePointerCancel = () => {
+    down.current = null;
+    setDrag(null);
+  };
+
+  const dragCode = drag !== null ? utils.charScreencodeFromRowCol(props.font, drag.from) : null;
+  const dragFb = useMemo(() => {
+    return [[{ code: dragCode !== null ? dragCode : 0x20, color: props.textColor }]];
+  }, [dragCode, props.textColor]);
 
   const customFonts = Object.entries(props.customFonts).map(([id, { name }]) => {
     return {
@@ -132,10 +207,17 @@ function CharSelectView(props: {
             transform: `scale(${scaleX}, ${scaleY})`,
             transformOrigin: '0% 0%',
             width: W*9,
-            height: H*9
+            height: H*9,
+            position: 'relative',
+            touchAction: 'none',
+            userSelect: 'none',
+            cursor: drag !== null ? 'grabbing' : undefined
           }}
           {...divProps}
-          onClick={handleOnClick}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerCancel}
         >
           <CharGrid
             width={W}
@@ -163,6 +245,28 @@ function CharSelectView(props: {
               opacity={1.0}
               charPos={props.selected} />
             : null}
+          {drag !== null ?
+            <div style={{
+              position: 'absolute',
+              left: drag.x - 4,
+              top: drag.y - 4,
+              width: 8,
+              height: 8,
+              zIndex: 2,
+              pointerEvents: 'none',
+              outline: '0.5px solid rgb(255,255,255)'
+            }}>
+              <CharGrid
+                width={1}
+                height={1}
+                grid={false}
+                backgroundColor={props.backgroundColor}
+                framebuf={dragFb}
+                font={props.font}
+                colorPalette={props.colorPalette}
+              />
+            </div>
+            : null}
         </div>
       </div>
 
@@ -176,6 +280,15 @@ function CharSelectView(props: {
         <CharSelectStatusbar
           curScreencode={screencode}
         />
+        {props.customLayout ?
+          <div
+            className={styles.resetLayout}
+            title='Put the characters back in their original order'
+            onClick={props.onResetLayout}
+          >
+            Reset layout
+          </div>
+          : null}
         <FontSelector
           currentCharset={props.charset}
           setCharset={props.setCharset}
@@ -199,10 +312,13 @@ class CharSelect extends Component<CharSelectProps> {
 
   computeCachedFb(textColor: number) {
     const { font } = this.props
-    this.fb = fp.mkArray(16, y => {
+    const layout = utils.charLayoutOf(font)
+    this.fb = fp.mkArray(utils.CHAR_LAYOUT_ROWS, y => {
       return fp.mkArray(16, x => {
+        const code = layout[y*16 + x]
         return {
-          code: utils.charScreencodeFromRowCol(font, {row:y, col:x})!,
+          // Empty places show as blanks
+          code: code === utils.EMPTY_CHAR ? 0x20 : code,
           color: textColor
         }
       })
@@ -222,7 +338,8 @@ class CharSelect extends Component<CharSelectProps> {
     // grid.
     const { scaleX, scaleY } = this.props.canvasScale
     const w = `${Math.floor(scaleX*8*16+scaleX*16)}px`
-    const h = `${Math.floor(scaleY*8*16+scaleY*16)}px`
+    const rows = utils.CHAR_LAYOUT_ROWS
+    const h = `${Math.floor(scaleY*8*rows+scaleY*rows)}px`
     const backg = utils.colorIndexToCssRgb(
       colorPalette, this.props.backgroundColor
     )
@@ -245,7 +362,11 @@ class CharSelect extends Component<CharSelectProps> {
         customFonts={this.props.customFonts}
         colorPalette={colorPalette}
         selected={this.props.selected!}
+        textColor={this.props.textColor}
+        customLayout={this.props.customLayout}
         onCharSelected={this.handleClick}
+        onCharMoved={this.props.Toolbar.moveChar}
+        onResetLayout={this.props.Toolbar.resetCharLayout}
         setCharset={this.props.Framebuffer.setCharset}
       />
     )
@@ -275,6 +396,7 @@ const mapStateToProps = (state: RootState) => {
     textColor: state.toolbar.textColor,
     charset,
     font,
+    customLayout: getSettings(state).charLayouts[charset] !== undefined,
     customFonts: selectors.getCustomFonts(state),
     colorPalette: getSettingsCurrentColorPalette(state)
   }

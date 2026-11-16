@@ -13,14 +13,21 @@ import {
 import * as fp from '../utils/fp'
 import { makeScreenName } from './utils'
 import { ActionsUnion, updateField } from './typeUtils'
+import { petOnly } from '../utils/platform'
 
 export const CHARSET_UPPER = 'upper'
 export const CHARSET_LOWER = 'lower'
 export const CHARSET_PET_UPPER = 'petUpper'
 export const CHARSET_PET_LOWER = 'petLower'
 
-export const DEFAULT_BACKGROUND_COLOR = 6
-export const DEFAULT_BORDER_COLOR = 14
+// The one character color of the PET-only web build.  It's the C64's green,
+// so screens saved there look right in the full app too.
+export const PET_COLOR = 5
+const PET_BACKGROUND_COLOR = 0
+
+export const DEFAULT_TEXT_COLOR = petOnly ? PET_COLOR : 14
+export const DEFAULT_BACKGROUND_COLOR = petOnly ? PET_BACKGROUND_COLOR : 6
+export const DEFAULT_BORDER_COLOR = petOnly ? PET_BACKGROUND_COLOR : 14
 
 export interface FbActionWithData<T extends string, D> extends Action<T> {
   data: D;
@@ -169,7 +176,7 @@ function shiftVertical(framebuf: Pixel[][], dir: -1 | 1) {
 }
 
 function emptyFramebuf(width: number, height: number): Pixel[][] {
-  return Array(height).fill(Array(width).fill({code: 32, color:14}))
+  return Array(height).fill(Array(width).fill({code: 32, color: DEFAULT_TEXT_COLOR}))
 }
 
 function mapPixels(fb: Framebuf, mapFn: (fb: Framebuf) => Pixel[][]) {
@@ -179,13 +186,56 @@ function mapPixels(fb: Framebuf, mapFn: (fb: Framebuf) => Pixel[][]) {
   }
 }
 
-export function fbReducer(state: Framebuf = {
+// Make a screen fit the PET-only build: a PET charset, black background and
+// border, and all characters in the one PET color.  Returns `fb` itself if
+// it already does.
+function toPetScreen(fb: Framebuf, checkPixels: boolean): Framebuf {
+  const charset =
+    fb.charset === CHARSET_PET_UPPER || fb.charset === CHARSET_PET_LOWER ? fb.charset :
+    fb.charset === CHARSET_LOWER ? CHARSET_PET_LOWER :
+    CHARSET_PET_UPPER;
+  let framebuf = fb.framebuf;
+  if (checkPixels && framebuf.some(row => row.some(pix => pix.color !== PET_COLOR))) {
+    framebuf = framebuf.map(row => row.map(pix => {
+      return pix.color === PET_COLOR ? pix : { code: pix.code, color: PET_COLOR };
+    }));
+  }
+  if (charset === fb.charset &&
+      framebuf === fb.framebuf &&
+      fb.backgroundColor === PET_BACKGROUND_COLOR &&
+      fb.borderColor === PET_BACKGROUND_COLOR) {
+    return fb;
+  }
+  return {
+    ...fb,
+    framebuf,
+    charset,
+    backgroundColor: PET_BACKGROUND_COLOR,
+    borderColor: PET_BACKGROUND_COLOR
+  };
+}
+
+export function fbReducer(state: Framebuf|undefined, action: Actions): Framebuf {
+  const next = baseFbReducer(state, action);
+  if (!petOnly || next === state) {
+    return next;
+  }
+  // Whole screens come in from files, autosave and other screens; anything
+  // else only draws with what's already on a PET screen.
+  const wholeScreen =
+    action.type === IMPORT_FILE ||
+    action.type === COPY_FRAMEBUF ||
+    action.type === SET_FIELDS;
+  return toPetScreen(next, wholeScreen);
+}
+
+function baseFbReducer(state: Framebuf = {
   framebuf: emptyFramebuf(DEFAULT_FB_WIDTH, DEFAULT_FB_HEIGHT),
   width: DEFAULT_FB_WIDTH,
   height: DEFAULT_FB_HEIGHT,
   backgroundColor: DEFAULT_BACKGROUND_COLOR,
   borderColor: DEFAULT_BORDER_COLOR,
-  charset: CHARSET_UPPER,
+  charset: petOnly ? CHARSET_PET_UPPER : CHARSET_UPPER,
   name: undefined
 }, action: Actions): Framebuf {
   switch (action.type) {

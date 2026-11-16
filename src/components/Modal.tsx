@@ -40,7 +40,7 @@ class ModalBase extends Component {
 interface ModalAnimWrapperState {
     init: boolean;
 }
-class ModalAnimWrapper extends Component<{}, ModalAnimWrapperState> {
+class ModalAnimWrapper extends Component<{ width?: number }, ModalAnimWrapperState> {
   state = {
     init: true
   }
@@ -75,6 +75,7 @@ class ModalAnimWrapper extends Component<{}, ModalAnimWrapperState> {
           <div
             className={styles.modal}
             style={{
+              width: this.props.width,
               opacity: this.state.init ? 0.0 : 1.0,
               transform: this.state.init ? 'translate(-50%, -40%)' : 'translate(-50%, -50%)',
               transition: 'opacity 0.2s linear, transform 0.2s linear'
@@ -89,12 +90,14 @@ class ModalAnimWrapper extends Component<{}, ModalAnimWrapperState> {
 
 interface ModalProps {
   showModal: boolean;
+  // Wider than the default modal, in pixels
+  width?: number;
 }
 
 export default class Modal extends Component<ModalProps> {
   modalBody = () => {
     return (
-      <ModalAnimWrapper>
+      <ModalAnimWrapper width={this.props.width}>
         {this.props.children}
       </ModalAnimWrapper>
     )

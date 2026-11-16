@@ -23,7 +23,8 @@ import { withHoverFade } from './hoc'
 import { petOnly } from '../utils/platform'
 
 import {
-  faBrush, faPencilAlt, faFont, faUndo, faRedo, faBroom, faCog, faArrowsAlt, faTv
+  faBrush, faPencilAlt, faFont, faUndo, faRedo, faBroom, faCog, faArrowsAlt, faTv,
+  faKeyboard
 } from '@fortawesome/free-solid-svg-icons'
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome'
 
@@ -353,6 +354,11 @@ class ToolbarView extends Component<
         tool: Tool.Text,
         iconName: faFont,
         tooltip: 'Text'
+      }),
+      mkTool({
+        tool: Tool.FontType,
+        iconName: faKeyboard,
+        tooltip: 'Type with your font (drag a frame around its A first)'
       }),
       mkTool({
         tool: Tool.PanZoom,

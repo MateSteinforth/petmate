@@ -3,7 +3,7 @@ import { bindActionCreators, Dispatch } from 'redux'
 
 import { Framebuffer, DEFAULT_TEXT_COLOR } from './editor'
 import * as Screens from './screens'
-import { Toolbar as IToolbar, Transform, RootStateThunk, Coord2, Pixel, BrushRegion, Font, Brush, Tool, Angle360, FramebufUIState, DEFAULT_FB_WIDTH, DEFAULT_FB_HEIGHT } from './types'
+import { Toolbar as IToolbar, TypeFont, Transform, RootStateThunk, Coord2, Pixel, BrushRegion, Font, Brush, Tool, Angle360, FramebufUIState, DEFAULT_FB_WIDTH, DEFAULT_FB_HEIGHT } from './types'
 
 import * as selectors from './selectors'
 import * as screensSelectors from '../redux/screensSelectors'
@@ -203,6 +203,8 @@ const actionCreators = {
 
   setTextColor: (c: number) => createAction('Toolbar/SET_TEXT_COLOR', c),
   setTextCursorPos: (pos: Coord2|null) => createAction('Toolbar/SET_TEXT_CURSOR_POS', pos),
+  setTypeFont: (font: TypeFont|null) => createAction('Toolbar/SET_TYPE_FONT', font),
+  setTypeLineStart: (col: number) => createAction('Toolbar/SET_TYPE_LINE_START', col),
   setSelectedTool: (t: Tool) => createAction('Toolbar/SET_SELECTED_TOOL', t),
   setBrushRegion: (br: BrushRegion) => createAction('Toolbar/SET_BRUSH_REGION', br),
   setBrush: (b: Brush) => createAction('Toolbar/SET_BRUSH', b),
@@ -215,6 +217,7 @@ const actionCreators = {
   setShowSettings: (flag: boolean) => createAction('Toolbar/SET_SHOW_SETTINGS', flag),
   setShowCustomFonts: (flag: boolean) => createAction('Toolbar/SET_SHOW_CUSTOM_FONTS', flag),
   setShowExport: (show: {show:boolean, fmt?:FileFormat}) => createAction('Toolbar/SET_SHOW_EXPORT', show),
+  setShowFontExport: (flag: boolean) => createAction('Toolbar/SET_SHOW_FONT_EXPORT', flag),
   setShowImport: (show: {show:boolean, fmt?:FileFormat}) => createAction('Toolbar/SET_SHOW_IMPORT', show),
   setSelectedPaletteRemap: (remapIdx: number) => createAction('Toolbar/SET_SELECTED_PALETTE_REMAP', remapIdx),
   setCanvasGrid: (flag: boolean) => createAction('Toolbar/SET_CANVAS_GRID', flag),
@@ -264,6 +267,7 @@ export class Toolbar {
 
         const inModal =
           state.toolbar.showExport.show ||
+          state.toolbar.showFontExport ||
           state.toolbar.showImport.show ||
           state.toolbar.showSettings ||
           state.toolbar.showCustomFonts;
@@ -281,6 +285,9 @@ export class Toolbar {
             if (showExport) {
               dispatch(Toolbar.actions.setShowExport({show:false}));
             }
+            if (state.toolbar.showFontExport) {
+              dispatch(Toolbar.actions.setShowFontExport(false));
+            }
             if (showImport) {
               dispatch(Toolbar.actions.setShowImport({show:false}));
             }
@@ -297,7 +304,8 @@ export class Toolbar {
           height = h;
         }
 
-        let inTextInput = selectedTool === Tool.Text && state.toolbar.textCursorPos !== null
+        let inTextInput = (selectedTool === Tool.Text || selectedTool === Tool.FontType) &&
+          state.toolbar.textCursorPos !== null
 
         // PET-only build: the canvas has a permanent cursor.  The arrow keys
         // move it, space puts down the selected character and backspace
@@ -427,6 +435,12 @@ export class Toolbar {
               ))
             }
           }
+        } else if (selectedTool === Tool.FontType) {
+          if (key === 'Escape') {
+            dispatch(Toolbar.actions.setTextCursorPos(null))
+          } else if (state.toolbar.textCursorPos !== null && !metaOrCtrl && framebufIndex !== null) {
+            dispatch(Toolbar.actions.typeFontKey(key, framebufIndex))
+          }
         } else if (noMods) {
           if (key === 'Escape') {
             if (selectedTool === Tool.Brush) {
@@ -510,6 +524,63 @@ export class Toolbar {
       }
     },
 
+    // A key press of the font type tool: put down the glyph of the user's
+    // font (see TypeFont) for that key at the text cursor.
+    typeFontKey: (key: string, framebufIndex: number): RootStateThunk => {
+      return (dispatch, getState) => {
+        const state = getState()
+        const { typeFont, textCursorPos: pos, typeLineStart } = state.toolbar
+        const fb = selectors.getFramebufByIndex(state, framebufIndex)
+        if (pos === null || fb === null) {
+          return
+        }
+        const cursorDir = cursorKeyDirs[key]
+        if (cursorDir !== undefined) {
+          // Fine positioning, one character at a time
+          const next = clampToScreen({ row: pos.row + cursorDir.row, col: pos.col + cursorDir.col }, fb.width, fb.height)
+          dispatch(Toolbar.actions.setTextCursorPos(next))
+          dispatch(Toolbar.actions.setTypeLineStart(next.col))
+          return
+        }
+        const source = typeFont !== null ? selectors.getFramebufByIndex(state, typeFont.framebufIndex) : null
+        if (typeFont === null || source === null) {
+          return
+        }
+        const { width: w, height: h, origin } = typeFont
+        const brushRegion = { min: { row: 0, col: 0 }, max: { row: h - 1, col: w - 1 } }
+        const stamp = (at: Coord2, framebuf: Pixel[][]) => {
+          dispatch(Framebuffer.actions.setBrush({ ...at, brush: { framebuf, brushRegion } }, state.toolbar.undoId, framebufIndex))
+          dispatch(Toolbar.actions.incUndoId())
+        }
+        const newLine = { row: Math.min(fb.height - 1, pos.row + h), col: typeLineStart }
+
+        if (key === 'Enter') {
+          dispatch(Toolbar.actions.setTextCursorPos(newLine))
+        } else if (key === 'Backspace') {
+          const prev = { row: pos.row, col: Math.max(0, pos.col - w) }
+          const blank = { code: 0x20, color: state.toolbar.textColor }
+          stamp(prev, Array(h).fill(Array(w).fill(blank)))
+          dispatch(Toolbar.actions.setTextCursorPos(prev))
+        } else if (key.length === 1) {
+          if (key !== ' ') {
+            const idx = utils.TYPE_FONT_GLYPHS.indexOf(key.toUpperCase())
+            const grid = utils.typeFontGrid(typeFont, source.width, source.height)
+            if (idx === -1 || idx >= grid.cols * grid.rows) {
+              // The font has no glyph for this key
+              return
+            }
+            const srcRow = origin.row + Math.floor(idx / grid.cols) * h
+            const srcCol = origin.col + (idx % grid.cols) * w
+            const glyph = source.framebuf.slice(srcRow, srcRow + h).map(row => row.slice(srcCol, srcCol + w))
+            stamp(pos, glyph)
+          }
+          // Advance, wrapping to the next line when the next glyph won't fit.
+          const next = { row: pos.row, col: pos.col + w }
+          dispatch(Toolbar.actions.setTextCursorPos(next.col + w > fb.width ? newLine : next))
+        }
+      }
+    },
+
     clearCanvas: (): RootStateThunk => {
       return dispatchForCurrentFramebuf((dispatch, framebufIndex) => {
         dispatch(Framebuffer.actions.clearCanvas(framebufIndex))
@@ -564,6 +635,7 @@ export class Toolbar {
         if (state.toolbar.selectedTool === Tool.Brush ||
           state.toolbar.selectedTool === Tool.Colorize ||
           state.toolbar.selectedTool === Tool.Text ||
+          state.toolbar.selectedTool === Tool.FontType ||
           state.toolbar.selectedTool === Tool.PanZoom) {
           dispatch(Toolbar.actions.setSelectedTool(Tool.Draw))
         }
@@ -642,6 +714,8 @@ export class Toolbar {
       undoId: 0,
       textColor: DEFAULT_TEXT_COLOR,
       textCursorPos: null as (Coord2|null),
+      typeFont: null as (TypeFont|null),
+      typeLineStart: 0,
       selectedTool: petTool(Tool.Draw),
       brushRegion: null as (BrushRegion|null),
       brush: null as (Brush|null),
@@ -654,6 +728,7 @@ export class Toolbar {
       showSettings: false,
       showCustomFonts: false,
       showExport: { show: false },
+      showFontExport: false,
       showImport: { show: false },
       selectedPaletteRemap: 0,
       canvasGrid: false,
@@ -763,6 +838,10 @@ export class Toolbar {
         return petOnly ? state : updateField(state, 'textColor', action.data);
       case 'Toolbar/SET_TEXT_CURSOR_POS':
         return updateField(state, 'textCursorPos', action.data);
+      case 'Toolbar/SET_TYPE_FONT':
+        return updateField(state, 'typeFont', action.data);
+      case 'Toolbar/SET_TYPE_LINE_START':
+        return updateField(state, 'typeLineStart', action.data);
       case 'Toolbar/SET_SELECTED_TOOL':
         return updateField(state, 'selectedTool', petTool(action.data));
       case 'Toolbar/SET_BRUSH_REGION':
@@ -787,6 +866,8 @@ export class Toolbar {
         return updateField(state, 'showCustomFonts', action.data);
       case 'Toolbar/SET_SHOW_EXPORT':
         return updateField(state, 'showExport', action.data);
+      case 'Toolbar/SET_SHOW_FONT_EXPORT':
+        return updateField(state, 'showFontExport', action.data);
       case 'Toolbar/SET_SHOW_IMPORT':
         return updateField(state, 'showImport', action.data);
       case 'Toolbar/SET_SELECTED_PALETTE_REMAP':

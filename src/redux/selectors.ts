@@ -101,6 +101,18 @@ export const getCurrentFramebufFont = (state: RootState) => {
   return getFramebufFont(state, fb);
 }
 
+// What a workspace file holds besides its screens and custom fonts.
+export function getWorkspaceExtras (state: RootState) {
+  const { typeFont } = state.toolbar
+  const screen = typeFont !== null ? state.screens.list.indexOf(typeFont.framebufIndex) : -1
+  return {
+    charLayouts: state.settings.saved.charLayouts,
+    typeFont: typeFont !== null && screen !== -1 ?
+      { screen, row: typeFont.origin.row, col: typeFont.origin.col, width: typeFont.width, height: typeFont.height } :
+      null
+  }
+}
+
 export function getCustomFonts (state: RootState): CustomFonts {
   return state.customFonts;
 }

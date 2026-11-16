@@ -5,7 +5,6 @@ import { ActionCreators } from 'redux-undo';
 
 import * as selectors from './selectors'
 import {
-  getSettings,
   getSettingsCurrentColorPalette
 } from '../redux/settingsSelectors'
 
@@ -53,7 +52,7 @@ function saveAsWorkspace(): ThunkAction<void, RootState, undefined, Action> {
       screens,
       getFramebufByIndex,
       customFontMap,
-      getSettings(state).charLayouts,
+      selectors.getWorkspaceExtras(state),
       state.toolbar.workspaceFilename,
       (filename: string) => dispatch(Toolbar.actions.setWorkspaceFilename(filename)),
       () => dispatch(actionCreators.updateLastSavedSnapshot())
@@ -123,7 +122,7 @@ export const actions = {
         screens,
         getFramebufByIndex,
         customFonts,
-        getSettings(state).charLayouts,
+        selectors.getWorkspaceExtras(state),
         () => dispatch(actionCreators.updateLastSavedSnapshot())
       );
     }

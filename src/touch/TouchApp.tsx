@@ -7,6 +7,7 @@ import { TouchScreen } from '../containers/Editor'
 import Settings from '../containers/Settings'
 import CustomFontsModal from '../containers/CustomFontsModal'
 import ExportModal from '../containers/ExportModal'
+import FontExportModal from '../containers/FontExportModal'
 import ImportModal from '../containers/ImportModal'
 import { Toolbar } from '../redux/toolbar'
 import * as ReduxRoot from '../redux/root'
@@ -242,6 +243,7 @@ function TouchApp_ (props: TouchAppProps) {
     <Settings />
     <CustomFontsModal />
     <ExportModal />
+    <FontExportModal />
     <ImportModal />
     <TextInputBridge />
   </>;

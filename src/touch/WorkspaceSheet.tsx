@@ -132,7 +132,8 @@ const exportItems = [
   { label: 'BASIC listing .bas', command: 'export-basic' },
   { label: 'JSON', command: 'export-json' },
   { label: 'PET screen RAM .prg', command: 'export-pet-prg' },
-  { label: 'C64 Raster Effect Editor .pet', command: 'export-pet' }
+  { label: 'C64 Raster Effect Editor .pet', command: 'export-pet' },
+  { label: 'Type font for the web (.otf, .svg)', command: 'export-font' }
 ];
 
 interface WorkspaceSheetProps {

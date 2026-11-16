@@ -78,6 +78,9 @@ export function runMenuCommand(dispatch: Dispatch, message: string) {
     case 'export-pet-prg':
       dispatchExport(dispatch, formats.petprg)
       return
+    case 'export-font':
+      dispatch(Toolbar.actions.setShowFontExport(true))
+      return
     case 'import-d64':
       dispatch(ReduxRoot.actions.fileImportAppend(formats.d64))
       return

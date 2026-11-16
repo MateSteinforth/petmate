@@ -14,3 +14,20 @@
 .fbContainer.panzoom {
   cursor: grab;
 }
+
+/* Cursor of the font type tool, the size of one glyph */
+.typeCursor {
+  position: absolute;
+  z-index: 1;
+  pointer-events: none;
+  box-sizing: border-box;
+  border: 0.5px solid rgb(255,255,255);
+  background-color: rgba(255,255,255,0.25);
+  animation: type-cursor-blink 1s steps(2, start) infinite;
+}
+
+@keyframes type-cursor-blink {
+  to {
+    background-color: rgba(255,255,255,0);
+  }
+}

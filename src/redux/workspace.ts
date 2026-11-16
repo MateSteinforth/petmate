@@ -12,12 +12,14 @@ import * as rcustomFonts from './customFonts';
 import { Framebuffer } from './editor';
 import { Framebuf, RootState, WsCustomFontsV2 } from './types';
 import * as Root from './root';
+import { Toolbar } from './toolbar';
 import * as screensSelectors from './screensSelectors';
 
 interface WorkspaceJson {
   version: number;
   customFonts?: WsCustomFontsV2;
   charLayouts?: { [charset: string]: number[] };
+  typeFont?: { screen: number, row: number, col: number, width: number, height: number } | null;
   screens: number[];
   framebufs: Framebuf[];
 };
@@ -70,6 +72,17 @@ export function load(workspace: WorkspaceJson): ThunkAction<void, RootState, und
         framebufIndex: fbIdx
       })
     })
+    const tf = workspace.typeFont;
+    if (tf && [tf.screen, tf.row, tf.col, tf.width, tf.height].every(Number.isInteger) &&
+        tf.screen >= 0 && tf.screen < screens.length && tf.row >= 0 && tf.col >= 0 &&
+        tf.width > 0 && tf.height > 0) {
+      dispatch(Toolbar.actions.setTypeFont({
+        framebufIndex: tf.screen,
+        origin: { row: tf.row, col: tf.col },
+        width: tf.width,
+        height: tf.height
+      }));
+    }
     dispatch(rscreens.actions.setCurrentScreenIndex(0))
     dispatch(Root.actions.updateLastSavedSnapshot());
   }

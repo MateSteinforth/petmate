@@ -91,7 +91,21 @@ export enum Tool {
   CharDraw = 2,
   Brush = 3,
   Text = 4,
-  PanZoom = 5
+  PanZoom = 5,
+  // Type with a font drawn out of characters on a screen.  Dragging with
+  // this tool marks where the font is, see TypeFont.
+  FontType = 6
+};
+
+// A font the user has drawn out of characters on a screen: a grid of
+// equally sized cells that starts at `origin` and holds the glyphs in
+// reading order (see utils.TYPE_FONT_GLYPHS).
+export interface TypeFont {
+  framebufIndex: number;
+  origin: Coord2;
+  // Size of a glyph cell in characters
+  width: number;
+  height: number;
 };
 
 // Per screen UI state
@@ -109,6 +123,9 @@ export interface Toolbar {
   undoId: number;
   textColor: number;
   textCursorPos: Coord2|null;
+  typeFont: TypeFont|null;
+  // The column a line typed with the font type tool starts at
+  typeLineStart: number;
   selectedTool: Tool;
   workspaceFilename: string|null;
   altKey: boolean;
@@ -119,6 +136,7 @@ export interface Toolbar {
   showSettings: boolean;
   showCustomFonts: boolean;
   showExport: { show: boolean, fmt?: FileFormat}; // fmt undefined only when show=false
+  showFontExport: boolean;
   showImport: { show: boolean, fmt?: FileFormat}; // fmt undefined only when show=false
   selectedPaletteRemap: number;
   canvasGrid: boolean;

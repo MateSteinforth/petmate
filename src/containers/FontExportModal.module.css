@@ -1,0 +1,107 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.container h2 {
+  margin-top: 0;
+}
+
+.preview {
+  flex: 1;
+  min-height: 80px;
+  background-color: #000;
+  border-radius: 3px;
+  padding: 8px;
+  display: flex;
+}
+
+.preview svg {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  fill: rgb(51, 255, 85);
+}
+
+.controls {
+  flex: none;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.slider {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.sliderLabel {
+  flex: none;
+  width: 170px;
+}
+
+.slider input {
+  flex: 1;
+  min-width: 0;
+}
+
+.sliderValue {
+  flex: none;
+  width: 64px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.fields {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.fields label {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.fields span {
+  margin-bottom: 4px;
+}
+
+.fields textarea,
+.fields input {
+  box-sizing: border-box;
+  width: 100%;
+  font-family: monospace;
+  font-size: 13px;
+  color: rgb(220, 220, 220);
+  background-color: rgb(34, 34, 34);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  padding: 5px;
+  resize: none;
+}
+
+.info {
+  margin-top: 10px;
+  color: rgb(170, 170, 170);
+  line-height: 1.4;
+}
+
+.info code {
+  color: rgb(220, 220, 220);
+  word-break: break-all;
+}
+
+.empty {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.buttons {
+  flex: none;
+  align-self: flex-end;
+  margin-top: 12px;
+}

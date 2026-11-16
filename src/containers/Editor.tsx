@@ -43,6 +43,7 @@ import {
   Brush,
   Font,
   Tool,
+  TypeFont,
   Pixel, Framebuf, FramebufUIState
 } from '../redux/types'
 
@@ -211,8 +212,51 @@ function CursorCharPreview (props: {
   );
 }
 
+// The grid of glyph cells of the user's font (see TypeFont), each labeled
+// with the key that types it.
+function FontGridOverlay (props: {
+  font: { origin: Coord2, width: number, height: number };
+  framebufWidth: number;
+  framebufHeight: number;
+}) {
+  const { origin, width, height } = props.font;
+  const { cols, rows } = utils.typeFontGrid(props.font, props.framebufWidth, props.framebufHeight);
+  const cells = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const idx = r*cols + c;
+      if (idx >= utils.TYPE_FONT_GLYPHS.length) {
+        break;
+      }
+      cells.push(
+        <div
+          key={idx}
+          style={{
+            position: 'absolute',
+            left: (origin.col + c*width)*8,
+            top: (origin.row + r*height)*8,
+            width: width*8,
+            height: height*8,
+            boxSizing: 'border-box',
+            border: `0.5px solid rgba(255,255,255,${idx === 0 ? 0.9 : 0.35})`,
+            color: 'rgba(255,255,255,0.75)',
+            fontSize: '3.5px',
+            lineHeight: '4px',
+            paddingLeft: '1px'
+          }}
+        >
+          {utils.TYPE_FONT_GLYPHS[idx]}
+        </div>
+      );
+    }
+  }
+  return <div style={{ position: 'absolute', left: 0, top: 0, zIndex: 1, pointerEvents: 'none' }}>{cells}</div>;
+}
+
 interface FramebufferViewProps {
   undoId: number | null;
+  framebufIndex: number | null;
+  typeFont: TypeFont | null;
 
   altKey: boolean;
   shiftKey: boolean;
@@ -264,6 +308,8 @@ interface FramebufferViewState {
   isActive: boolean;
   // Touch long-press color & char picker
   loupe: { charPos: Coord2, clientX: number, clientY: number } | null;
+  // The frame being dragged out with the font type tool
+  fontFrame: BrushRegion | null;
 }
 
 // How long a finger has to rest on a cell for the loupe/picker to open.
@@ -283,10 +329,13 @@ class FramebufferView extends Component<FramebufferViewProps & FramebufferViewDi
   state: FramebufferViewState = {
     charPos: { row: -1, col: 0 },
     isActive: false,
-    loupe: null
+    loupe: null,
+    fontFrame: null
   }
 
   prevDragPos: Coord2|null = null;
+  // Where a click or drag of the font type tool started
+  fontDragStart: Coord2|null = null;
 
   setChar = (clickLoc: Coord2) => {
     const { undoId } = this.props;
@@ -344,6 +393,10 @@ class FramebufferView extends Component<FramebufferViewProps & FramebufferViewDi
       }
     } else if (selectedTool === Tool.Text) {
       this.props.Toolbar.setTextCursorPos(coord)
+    } else if (selectedTool === Tool.FontType) {
+      // A click sets where the typing goes, a drag frames the font's first
+      // glyph.  Which one it is shows in dragMove/dragEnd.
+      this.fontDragStart = this.clampToFramebuf(coord)
     }
     this.prevDragPos = coord
   }
@@ -370,8 +423,10 @@ class FramebufferView extends Component<FramebufferViewProps & FramebufferViewDi
           max: clamped
         })
       }
-    } else {
-      console.error('not implemented')
+    } else if (selectedTool === Tool.FontType) {
+      if (this.fontDragStart !== null) {
+        this.setState({ fontFrame: { min: this.fontDragStart, max: this.clampToFramebuf(coord) } })
+      }
     }
 
     this.prevDragPos = coord
@@ -383,6 +438,25 @@ class FramebufferView extends Component<FramebufferViewProps & FramebufferViewDi
       if (brush === null && brushRegion !== null) {
         this.props.Toolbar.captureBrush(this.props.framebuf, brushRegion)
       }
+    } else if (selectedTool === Tool.FontType) {
+      const { fontFrame } = this.state
+      if (fontFrame !== null) {
+        // The frame around the first glyph sets the cell size of the font.
+        if (this.props.framebufIndex !== null) {
+          const { min, max } = utils.sortRegion(fontFrame)
+          this.props.Toolbar.setTypeFont({
+            framebufIndex: this.props.framebufIndex,
+            origin: min,
+            width: max.col - min.col + 1,
+            height: max.row - min.row + 1
+          })
+        }
+        this.setState({ fontFrame: null })
+      } else if (this.fontDragStart !== null) {
+        this.props.Toolbar.setTextCursorPos(this.fontDragStart)
+        this.props.Toolbar.setTypeLineStart(this.fontDragStart.col)
+      }
+      this.fontDragStart = null
     }
     this.props.Toolbar.incUndoId()
   }
@@ -1096,6 +1170,45 @@ class FramebufferView extends Component<FramebufferViewProps & FramebufferViewDi
         </Fragment>
     }
 
+    // The user's font: its grid always shows on the screen it's drawn on,
+    // and the type tool's cursor is the size of a glyph.
+    const { typeFont } = this.props
+    let fontOverlay = null
+    if (selectedTool === Tool.FontType && this.state.fontFrame !== null) {
+      const { min, max } = utils.sortRegion(this.state.fontFrame)
+      fontOverlay =
+        <FontGridOverlay
+          font={{ origin: min, width: max.col - min.col + 1, height: max.row - min.row + 1 }}
+          framebufWidth={charWidth}
+          framebufHeight={charHeight}
+        />
+    } else if (typeFont !== null && typeFont.framebufIndex === this.props.framebufIndex) {
+      fontOverlay =
+        <FontGridOverlay font={typeFont} framebufWidth={charWidth} framebufHeight={charHeight} />
+    }
+    if (selectedTool === Tool.FontType && this.props.textCursorPos !== null) {
+      const pos = this.props.textCursorPos
+      fontOverlay =
+        <Fragment>
+          {fontOverlay}
+          <div
+            className={styles.typeCursor}
+            style={{
+              left: pos.col*8,
+              top: pos.row*8,
+              width: (typeFont !== null ? typeFont.width : 1)*8,
+              height: (typeFont !== null ? typeFont.height : 1)*8
+            }}
+          />
+        </Fragment>
+    }
+
+    // While typing, the keys go to the text cursor, so that's the only
+    // cursor shown.
+    const typing = this.props.textCursorPos !== null &&
+      (selectedTool === Tool.Text || selectedTool === Tool.FontType)
+    const showKeyboardCursor = keyboardCursor && !typing
+
     const cx = '100%';
     const cy = '100%';
     // TODO scaleX and Y
@@ -1148,8 +1261,9 @@ class FramebufferView extends Component<FramebufferViewProps & FramebufferViewDi
             colorPalette={this.props.colorPalette}
           />
           {overlays}
+          {fontOverlay}
           {this.props.canvasGrid ? <GridOverlay width={charWidth} height={charHeight} color={gridColor}   /> : null}
-          {keyboardCursor &&
+          {showKeyboardCursor &&
             this.props.cursorPos.row < charHeight && this.props.cursorPos.col < charWidth ?
             <CursorCharPreview
               charPos={this.props.cursorPos}
@@ -1160,7 +1274,7 @@ class FramebufferView extends Component<FramebufferViewProps & FramebufferViewDi
               font={this.props.font}
             /> :
             null}
-          {this.props.cursorMode || keyboardCursor ?
+          {this.props.cursorMode || showKeyboardCursor ?
             <CharPosOverlay
               framebufWidth={this.props.framebufWidth}
               framebufHeight={this.props.framebufHeight}
@@ -1237,6 +1351,7 @@ const FramebufferCont = connect(
       framebufHeight: framebuf.height,
       backgroundColor: framebuf.backgroundColor,
       undoId: state.toolbar.undoId,
+      typeFont: state.toolbar.typeFont,
       curScreencode: selectors.getScreencodeWithTransform(selected, font, charTransform),
       selectedTool: state.toolbar.selectedTool,
       textColor: state.toolbar.textColor,

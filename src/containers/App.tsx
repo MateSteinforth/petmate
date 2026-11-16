@@ -8,6 +8,7 @@ import FramebufferTabs from './FramebufferTabs'
 import Settings from './Settings'
 import CustomFontsModal from './CustomFontsModal';
 import ExportModal from './ExportModal'
+import FontExportModal from './FontExportModal'
 import ImportModal from './ImportModal'
 import Editor from './Editor';
 import FileDrop from './FileDrop'
@@ -146,6 +147,7 @@ class AppView extends Component<AppViewProps> {
         <Settings />
         <CustomFontsModal />
         <ExportModal />
+        <FontExportModal />
         <ImportModal />
       </Fragment>
     )

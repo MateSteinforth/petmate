@@ -120,7 +120,8 @@ class TextInputBridge extends Component<TextInputBridgeProps> {
 export default connect(
   (state: RootState) => {
     return {
-      active: state.toolbar.selectedTool === Tool.Text && state.toolbar.textCursorPos !== null,
+      active: (state.toolbar.selectedTool === Tool.Text || state.toolbar.selectedTool === Tool.FontType) &&
+        state.toolbar.textCursorPos !== null,
       shiftKey: state.toolbar.shiftKey
     }
   },

@@ -18,7 +18,8 @@ const exporters = [
   { label: 'PNG (.png)', cmd: 'export-png' },
   { label: 'SEQ (.seq)', cmd: 'export-seq' },
   { label: 'PET (.pet)', cmd: 'export-pet' },
-  { label: 'Commodore PET screen RAM (.prg)', cmd: 'export-pet-prg' }
+  { label: 'Commodore PET screen RAM (.prg)', cmd: 'export-pet-prg' },
+  { label: 'Type font for the web (.otf, .svg)', cmd: 'export-font' }
 ]
 
 module.exports = class MenuBuilder {

@@ -10,7 +10,10 @@ import { fs } from '../utils/electronImports'
 import * as platform from '../utils/platform'
 import {
   TracedFont,
+  Spacing,
   traceTypeFont,
+  computeMetrics,
+  drawnLetterSpacing,
   layoutText,
   countPoints,
   buildOpenTypeFont,
@@ -24,8 +27,13 @@ import styles from './FontExportModal.module.css'
 const MAX_RADIUS = 8
 const PREVIEW_CHARS_PER_LINE = 13
 
-// The corner settings stay as they were when the dialog is opened again.
+const MAX_LETTER_SPACING = 16
+
+// The settings stay as they were when the dialog is opened again.  The
+// letter spacing starts out as the gap the glyphs were drawn with.
 let lastRadii = { outer: 0, inner: 0 }
+let lastSpacing: { proportional: boolean, letterSpacing: number|null, kerning: number } =
+  { proportional: true, letterSpacing: null, kerning: 1 }
 
 function defaultSampleText(font: TracedFont): string {
   const chars = font.glyphs.map(g => g.char).join('')
@@ -55,22 +63,35 @@ function saveFile(name: string, ext: string, data: Uint8Array|string) {
   })
 }
 
-function Slider (props: { label: string, value: number, onChange: (v: number) => void }) {
+function Slider (props: {
+  label: string,
+  value: number,
+  max: number,
+  step: number,
+  format: (v: number) => string,
+  disabled?: boolean,
+  onChange: (v: number) => void
+}) {
   return (
-    <label className={styles.slider}>
+    <label className={styles.slider} style={{ opacity: props.disabled ? 0.4 : 1 }}>
       <span className={styles.sliderLabel}>{props.label}</span>
       <input
         type='range'
         min={0}
-        max={MAX_RADIUS}
-        step={0.25}
+        max={props.max}
+        step={props.step}
         value={props.value}
+        disabled={props.disabled}
         onChange={e => props.onChange(parseFloat(e.target.value))}
       />
-      <span className={styles.sliderValue}>{props.value.toFixed(2)} px</span>
+      <span className={styles.sliderValue}>{props.format(props.value)}</span>
     </label>
   )
 }
+
+const formatPx = (v: number) => `${v.toFixed(2)} px`
+const formatWholePx = (v: number) => `${v} px`
+const formatPercent = (v: number) => `${Math.round(v * 100)} %`
 
 interface FontExportProps {
   font: TracedFont;
@@ -88,8 +109,24 @@ function FontExport (props: FontExportProps) {
     lastRadii = r
     setRadiiState(r)
   }
+  const [spacingState, setSpacingState] = useState(lastSpacing)
+  const spacing: Spacing = {
+    ...spacingState,
+    letterSpacing: spacingState.letterSpacing !== null ?
+      spacingState.letterSpacing :
+      Math.min(MAX_LETTER_SPACING, drawnLetterSpacing(font))
+  }
+  const setSpacing = (s: Partial<Spacing>) => {
+    lastSpacing = { ...spacingState, ...s }
+    setSpacingState(lastSpacing)
+  }
+  const { proportional, letterSpacing, kerning } = spacing
+  const metrics = useMemo(
+    () => computeMetrics(font, { proportional, letterSpacing, kerning }),
+    [font, proportional, letterSpacing, kerning]
+  )
   const text = sample !== null ? sample : defaultSampleText(font)
-  const layout = useMemo(() => layoutText(font, radii, text), [font, radii, text])
+  const layout = useMemo(() => layoutText(font, radii, metrics, text), [font, radii, metrics, text])
   const points = useMemo(() => countPoints(font, radii), [font, radii])
   const name = familyName.trim() !== '' ? familyName.trim() : 'PETSCII Font'
   const base = fileBaseName(name)
@@ -108,13 +145,45 @@ function FontExport (props: FontExportProps) {
       <div className={styles.controls}>
         <Slider
           label='Round outer corners'
+          max={MAX_RADIUS}
+          step={0.25}
+          format={formatPx}
           value={radii.outer}
           onChange={outer => setRadii({ ...radii, outer })}
         />
         <Slider
           label='Round where pixels meet'
+          max={MAX_RADIUS}
+          step={0.25}
+          format={formatPx}
           value={radii.inner}
           onChange={inner => setRadii({ ...radii, inner })}
+        />
+        <label className={styles.check}>
+          <input
+            type='checkbox'
+            checked={proportional}
+            onChange={e => setSpacing({ proportional: e.target.checked })}
+          />
+          Fit the spacing to the shapes of the letters (off: every letter is as wide as its cell)
+        </label>
+        <Slider
+          label='Letter spacing'
+          max={MAX_LETTER_SPACING}
+          step={1}
+          format={formatWholePx}
+          disabled={!proportional}
+          value={letterSpacing}
+          onChange={v => setSpacing({ letterSpacing: v })}
+        />
+        <Slider
+          label='Kerning'
+          max={1}
+          step={0.05}
+          format={formatPercent}
+          disabled={!proportional}
+          value={kerning}
+          onChange={v => setSpacing({ kerning: v })}
         />
         <div className={styles.fields}>
           <label>
@@ -137,7 +206,7 @@ function FontExport (props: FontExportProps) {
           </label>
         </div>
         <div className={styles.info}>
-          {font.glyphs.length} glyphs, {points} outline points.  Use the font file on a page with{' '}
+          {font.glyphs.length} glyphs, {points} outline points, {metrics.kerningPairs} kerning pairs.  Use the font file on a page with{' '}
           <code>{`@font-face { font-family: "${name}"; src: url("${base}.otf"); }`}</code>
         </div>
       </div>
@@ -146,7 +215,7 @@ function FontExport (props: FontExportProps) {
         <button className='primary' onClick={() => saveFile(base, 'svg', buildSvg(font, radii, name))}>
           Save SVG
         </button>
-        <button className='primary' onClick={() => saveFile(base, 'otf', buildOpenTypeFont(font, radii, name))}>
+        <button className='primary' onClick={() => saveFile(base, 'otf', buildOpenTypeFont(font, radii, metrics, name))}>
           Save font (.otf)
         </button>
       </div>

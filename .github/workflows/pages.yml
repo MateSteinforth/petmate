@@ -6,7 +6,7 @@ name: Deploy web app
 
 on:
   push:
-    branches: [master, web-version, PETonly]
+    branches: [master, web-version]
   workflow_dispatch:
 
 permissions:
